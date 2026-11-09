@@ -17,6 +17,52 @@ const signedThumbs = new Map();
 const priorityNames={high:'Tinggi',normal:'Sedang',low:'Rendah'}, statusNames={todo:'Belum mulai',doing:'Dikerjakan',done:'Selesai'};
 const icons={home:'◫',shift:'◷',tasks:'☑',reports:'▤',team:'♧',settings:'⚙'};
 const tabs=[['home','Dashboard'],['shift','Checklist Shift'],['tasks','Tugas'],['reports','Laporan'],['team','Tim'],['settings','Pengaturan']];
+
+// v13: hanya preferensi tampilan lokal berdasarkan akun login di perangkat ini.
+// Tidak disimpan ke Supabase dan tidak pernah ikut dalam data tim.
+const PERSONAL_THEMES=[
+ {id:'pop',name:'Pop Folder',subtitle:'Kartu folder · garis hitam · kuning cerah',bg:'#fff8e6',card:'#fffdf9',accent:'#ffcf23',dark:false},
+ {id:'classic',name:'TaskMate Original',subtitle:'Tampilan awal yang familiar',bg:'#f5f7fb',card:'#ffffff',accent:'#356ef4',dark:false},
+ {id:'wallet',name:'Midnight Wallet',subtitle:'Gelap · gradasi ungu & neon',bg:'#151629',card:'#282941',accent:'#a780ff',dark:true},
+ {id:'trantor',name:'Trantor Mint',subtitle:'Putih · hitam · mint segar',bg:'#f0f4f2',card:'#ffffff',accent:'#22beb2',dark:false},
+ {id:'social',name:'Social Coral',subtitle:'Navy · putih · coral',bg:'#f5f5fc',card:'#ffffff',accent:'#fb6987',dark:false},
+ {id:'moonie',name:'Moonie Aurora',subtitle:'Malam ungu · cahaya magenta',bg:'#171b4f',card:'#2b3069',accent:'#e292fa',dark:true},
+ {id:'arena',name:'Arena Neon',subtitle:'Esports · elektrik biru & cyan',bg:'#07182c',card:'#0f3049',accent:'#2cdcf1',dark:true},
+ {id:'gamer',name:'Gamer Pop',subtitle:'Putih · biru · warna ceria',bg:'#f3f7ff',card:'#ffffff',accent:'#6677ff',dark:false},
+ {id:'melody',name:'Melody Studio',subtitle:'Putih · garis hitam · peach',bg:'#f7f8f6',card:'#ffffff',accent:'#f4b35e',dark:false},
+ {id:'ink',name:'Ink Cat',subtitle:'Monokrom · aprikot lembut',bg:'#f6f5f3',card:'#ffffff',accent:'#ffa878',dark:false},
+ {id:'learn',name:'Learn Minimal',subtitle:'Editorial · hitam & putih',bg:'#efefef',card:'#ffffff',accent:'#141414',dark:false},
+ {id:'navy',name:'Task Navy',subtitle:'Timeline gelap · lime & cyan',bg:'#13233e',card:'#223756',accent:'#c6eaa1',dark:true}
+];
+function personalThemeKey(){return 'taskmate-personal-theme-v1:'+String(state.user?.id||'guest')}
+function personalTheme(){
+ try{const saved=localStorage.getItem(personalThemeKey());return PERSONAL_THEMES.some(x=>x.id===saved)?saved:'classic'}
+ catch{return 'classic'}
+}
+function applyPersonalTheme(){
+ const id=personalTheme(),theme=PERSONAL_THEMES.find(x=>x.id===id)||PERSONAL_THEMES[0];
+ document.documentElement.dataset.tmTheme=id;
+ const meta=document.querySelector('meta[name="theme-color"]');if(meta)meta.setAttribute('content',theme.bg);
+}
+function personalThemePicker(){
+ const selected=personalTheme();
+ return `<section class="panel tm-theme-settings" aria-labelledby="tm-theme-heading">
+  <div class="tm-theme-header"><div><span class="tm-theme-kicker">PERSONALISASI TAMPILAN</span><h2 id="tm-theme-heading">Tema aplikasi</h2>
+  <p>Pilih gaya yang paling nyaman. Pilihan ini hanya berlaku untuk akun ini di HP ini.</p></div><span class="tm-theme-local-pill">🔒 Lokal</span></div>
+  <div class="tm-theme-grid">${PERSONAL_THEMES.map(t=>`<button type="button" data-action="personal-theme" data-theme="${t.id}" class="tm-theme-option ${t.id===selected?'selected':''}" aria-pressed="${t.id===selected}" title="Pilih ${t.name}">
+   <span class="tm-theme-preview" style="--preview-bg:${t.bg};--preview-card:${t.card};--preview-accent:${t.accent};--preview-ink:${t.dark?'#f5f6ff':'#23324b'}">
+    <span class="tm-preview-status"><i></i><i></i><i></i></span>
+    <span class="tm-preview-banner"><b></b><b></b></span>
+    <span class="tm-preview-row"><i></i><i></i></span>
+    <span class="tm-preview-row short"><i></i><i></i></span>
+    <span class="tm-preview-foot"><i></i><i></i><i></i></span>
+   </span><span class="tm-theme-option-title">${t.name}<span aria-hidden="true">${t.id===selected?'✓':''}</span></span>
+   <span class="tm-theme-option-desc">${t.subtitle}</span>
+  </button>`).join('')}</div>
+  <div class="tm-theme-privacy">✓ Tidak mengubah akun lain &nbsp;·&nbsp; ✓ Tidak mengubah data pekerjaan &nbsp;·&nbsp; ✓ Tidak perlu Supabase</div>
+ </section>`;
+}
+
 function notify(msg,isError=false){const t=$('#toast');if(!t)return;t.textContent=msg;t.className='show'+(isError?' error':'');clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.className='',3400)}
 function errMessage(error){return error?.message || String(error || 'Terjadi kesalahan.');}
 function showError(error){console.error('[TaskMate]',error);notify(errMessage(error),true)}
@@ -154,15 +200,19 @@ function reportsPage(){
 function teamPage(){
  const code=state.workspace.invite_code,admin=isAdmin(),members=state.members.filter(m=>m.status==='approved'),pending=state.members.filter(m=>m.status==='pending'),other=state.members.filter(m=>m.status==='rejected'||m.status==='disabled');
  const adminButton=(m,action,label,cls='outline')=>`<button class="btn ${cls} sm" type="button" data-action="manage-member" data-id="${esc(m.user_id)}" data-member-action="${action}">${label}</button>`;
- const person=(m)=>`<div class="person-row" style="flex-wrap:wrap;gap:10px"><div class="avatar">${esc(initials(memberName(m.user_id)))}</div><div style="flex:1;min-width:130px"><strong>${esc(memberName(m.user_id))}</strong><br><span>${m.user_id===state.user.id?'Akun Anda':m.status==='pending'?'Menunggu persetujuan':m.status==='disabled'?'Akses nonaktif':m.status==='rejected'?'Ditolak':m.role==='admin'?'Admin':'Karyawan'}</span></div><span class="status-pill ${m.status==='approved'&&m.role==='admin'?'doing':''}">${m.status==='pending'?'Pending':m.status==='disabled'?'Nonaktif':m.status==='rejected'?'Ditolak':m.role==='admin'?'Admin':'Aktif'}</span>${admin?`<div style="display:flex;gap:6px;flex-wrap:wrap;width:100%;margin:3px 0 0 48px">${m.status==='pending'?adminButton(m,'approve','✓ Setujui','primary')+adminButton(m,'reject','Tolak','danger'):m.status==='approved'?adminButton(m,m.role==='admin'?'demote':'promote',m.role==='admin'?'Jadikan karyawan':'Jadikan admin')+adminButton(m,'disable','Nonaktifkan','danger'):adminButton(m,'reactivate','Aktifkan kembali')}</div>`:''}</div>`;
+ const linkedIds=new Set(state.staffLinks.map(l=>l.user_id));
+ const availableExcel=IMPORTED.staff.filter(p=>!state.staffLinks.some(l=>l.staff_key===p.key));
+ const linkButton=m=>state.mode==='cloud'&&availableExcel.length?`<button class="btn primary sm" type="button" data-action="approve-link-open" data-id="${esc(m.user_id)}">${m.status==='pending'?'✓ Setujui + Tautkan':'🔗 Tautkan ke Excel'}</button>`:'';
+
+ const person=(m)=>`<div class="person-row" style="flex-wrap:wrap;gap:10px"><div class="avatar">${esc(initials(memberName(m.user_id)))}</div><div style="flex:1;min-width:130px"><strong>${esc(memberName(m.user_id))}</strong><br><span>${m.user_id===state.user.id?'Akun Anda':m.status==='pending'?'Menunggu persetujuan':m.status==='disabled'?'Akses nonaktif':m.status==='rejected'?'Ditolak':m.role==='admin'?'Admin':'Karyawan'}</span></div><span class="status-pill ${m.status==='approved'&&m.role==='admin'?'doing':''}">${m.status==='pending'?'Pending':m.status==='disabled'?'Nonaktif':m.status==='rejected'?'Ditolak':m.role==='admin'?'Admin':'Aktif'}</span>${admin?`<div style="display:flex;gap:6px;flex-wrap:wrap;width:100%;margin:3px 0 0 48px">${m.status==='pending'?linkButton(m)+adminButton(m,'approve','Setujui tanpa tautan')+adminButton(m,'reject','Tolak','danger'):m.status==='approved'?(linkedIds.has(m.user_id)?'':linkButton(m))+adminButton(m,m.role==='admin'?'demote':'promote',m.role==='admin'?'Jadikan karyawan':'Jadikan admin')+adminButton(m,'disable','Nonaktifkan','danger'):adminButton(m,'reactivate','Aktifkan kembali')}</div>`:''}</div>`;
  return `<div class="section-header" style="margin-top:0"><div><h2>Manajemen Akun & Tim</h2><p>Setujui karyawan sebelum mereka mengakses data toko</p></div>${state.mode==='cloud'?`<button class="btn outline sm" data-action="open-workspace">＋ Tim lainnya</button>`:''}</div>
- <div class="notice info" style="margin-bottom:12px">🔒 Pendaftaran akun dan kode undangan tidak memberi akses otomatis. Admin harus menyetujui permintaan. Karyawan nonaktif tidak dapat membaca data tim.</div>
+ <div class="notice info" style="margin-bottom:12px">🔒 Karyawan baru tidak otomatis memperoleh akses. Admin dapat memilih <b>Setujui + Tautkan</b>, lalu memilih nama Excel yang benar. Jadwal dan rak langsung disinkronkan tanpa perlu klik ulang. Karyawan nonaktif tidak dapat membaca data tim.</div>
  ${admin?`<section class="panel" style="margin-bottom:14px"><h3>Permintaan Persetujuan · ${pending.length}</h3>${pending.length?pending.map(person).join(''):'<p class="small muted">Tidak ada permintaan baru.</p>'}</section>`:''}
  <div class="split-layout"><section class="panel"><h3>Anggota Aktif · ${members.length}</h3>${members.length?members.map(person).join(''):'<p class="small muted">Belum ada anggota aktif.</p>'}${admin&&other.length?`<div style="margin-top:18px"><h3>Ditolak / Dinonaktifkan · ${other.length}</h3>${other.map(person).join('')}</div>`:''}</section>
  <section class="panel"><h3>Kode Undangan Tim</h3><p class="small muted">Bagikan hanya ke calon karyawan. Mereka tetap perlu disetujui admin setelah memasukkan kode ini.</p><div class="codebox"><strong>${esc(code)}</strong><p>${state.mode==='demo'?'Kode contoh':'Kode tim — persetujuan tetap wajib'}</p></div><button class="btn soft block" data-action="copy-code">⧉ Salin kode tim</button><button class="btn outline block" style="margin-top:10px" data-action="sync">↻ Perbarui daftar anggota</button><p class="small muted" style="margin-top:15px">Perubahan status berlaku di server Supabase. Akun yang dinonaktifkan harus disetujui ulang bila ingin menggunakan tim ini.</p></section></div>`;
 }
 function settingsPage(){
- return `<div class="section-header" style="margin-top:0"><div><h2>Pengaturan aplikasi</h2><p>Pengingat, akun, dan koneksi cloud</p></div></div><div class="panel"><div class="settings-item"><div><h4>Mode penyimpanan</h4><p>${state.mode==='cloud'?'Supabase — data tim tersimpan online dan tersinkron antar HP.':'Demo — data hanya tersimpan lokal di perangkat ini.'}</p></div><span class="chip ${state.mode==='demo'?'demo':''}"><i class="dot"></i>${state.mode==='demo'?'Lokal':'Cloud'}</span></div><div class="settings-item"><div><h4>Notifikasi deadline</h4><p>Aktifkan pengingat browser saat aplikasi sedang terbuka (30 menit sebelum deadline).</p></div><button class="btn soft sm" data-action="notifications">${typeof Notification!=='undefined'&&Notification.permission==='granted'?'Sudah aktif':'Aktifkan'}</button></div><div class="settings-item"><div><h4>Sinkronisasi data</h4><p>Terakhir diperbarui: ${state.lastSync?esc(niceTime(state.lastSync)):'Belum pernah'}.</p></div><button class="btn outline sm" data-action="sync">↻ Sinkron</button></div><div class="settings-item"><div><h4>Pengaturan server Supabase</h4><p>${state.mode==='cloud'?'Proyek cloud terhubung.':'Hubungkan proyek Supabase untuk memakai banyak HP.'}</p></div><button class="btn outline sm" data-action="open-config">${state.mode==='cloud'?'Lihat konfigurasi':'Hubungkan'}</button></div>${state.mode==='cloud'?`<div class="settings-item"><div><h4>Akun pengguna</h4><p>${esc(state.user?.email||'')} · ${esc(currentUserName())}</p></div><button class="btn danger sm" data-action="logout">Keluar</button></div>`:`<div class="settings-item"><div><h4>Reset data demo</h4><p>Hapus tugas demo pada perangkat ini dan kembalikan data contoh.</p></div><button class="btn danger sm" data-action="reset-demo">Reset</button></div>`}</div><div class="notice info" style="margin-top:18px">🔒 &nbsp; Foto bukti pada mode cloud menggunakan bucket privat. Hanya anggota tim yang memiliki akses.</div>`;
+ return `<div class="section-header" style="margin-top:0"><div><h2>Pengaturan aplikasi</h2><p>Pengingat, akun, dan koneksi cloud</p></div></div>${personalThemePicker()}<div class="panel"><div class="settings-item"><div><h4>Mode penyimpanan</h4><p>${state.mode==='cloud'?'Supabase — data tim tersimpan online dan tersinkron antar HP.':'Demo — data hanya tersimpan lokal di perangkat ini.'}</p></div><span class="chip ${state.mode==='demo'?'demo':''}"><i class="dot"></i>${state.mode==='demo'?'Lokal':'Cloud'}</span></div><div class="settings-item"><div><h4>Notifikasi deadline</h4><p>Aktifkan pengingat browser saat aplikasi sedang terbuka (30 menit sebelum deadline).</p></div><button class="btn soft sm" data-action="notifications">${typeof Notification!=='undefined'&&Notification.permission==='granted'?'Sudah aktif':'Aktifkan'}</button></div><div class="settings-item"><div><h4>Sinkronisasi data</h4><p>Terakhir diperbarui: ${state.lastSync?esc(niceTime(state.lastSync)):'Belum pernah'}.</p></div><button class="btn outline sm" data-action="sync">↻ Sinkron</button></div><div class="settings-item"><div><h4>Pengaturan server Supabase</h4><p>${state.mode==='cloud'?'Proyek cloud terhubung.':'Hubungkan proyek Supabase untuk memakai banyak HP.'}</p></div><button class="btn outline sm" data-action="open-config">${state.mode==='cloud'?'Lihat konfigurasi':'Hubungkan'}</button></div>${state.mode==='cloud'?`<div class="settings-item"><div><h4>Akun pengguna</h4><p>${esc(state.user?.email||'')} · ${esc(currentUserName())}</p></div><button class="btn danger sm" data-action="logout">Keluar</button></div>`:`<div class="settings-item"><div><h4>Reset data demo</h4><p>Hapus tugas demo pada perangkat ini dan kembalikan data contoh.</p></div><button class="btn danger sm" data-action="reset-demo">Reset</button></div>`}</div><div class="notice info" style="margin-top:18px">🔒 &nbsp; Foto bukti pada mode cloud menggunakan bucket privat. Hanya anggota tim yang memiliki akses.</div>`;
 }
 function authPage(){
  const signup=state.authTab==='signup';
@@ -177,6 +227,7 @@ function noWorkspacePage(){
  <div style="text-align:center;color:#9ca9b8;font-size:12px;margin:21px">— ATAU —</div><form id="join-workspace"><div class="form-grp"><label>Kode undangan dari admin</label><input class="field" name="code" required placeholder="Contoh: A1B2C3D4" style="text-transform:uppercase"></div><button class="btn outline block" type="submit">Kirim permintaan gabung</button></form><p class="small muted" style="margin-top:12px">Permintaan harus disetujui admin sebelum Anda dapat membaca jadwal dan tugas tim.</p><div class="back-link" data-action="logout">Keluar dari akun</div></div></div>`;
 }
 function render(){
+ applyPersonalTheme();
  let html;
  if(state.mode==='cloud'&&!state.user)html=authPage();
  else if(state.mode==='cloud'&&!state.workspace)html=noWorkspacePage();
@@ -216,6 +267,39 @@ function configModal(){
  return modalFrame('Hubungkan Supabase','Sinkronisasi tugas, laporan, dan foto dari beberapa HP',body);
 }
 function workspaceModal(){return modalFrame('Gabung / buat tim lain','Akun yang sama bisa bergabung dalam beberapa tim',`<form id="create-workspace"><div class="form-grp"><label>Nama tim baru</label><input class="field" name="name" minlength="2" required placeholder="Tim Lapangan"></div><button class="btn primary block" type="submit">Buat tim</button></form><p class="small muted" style="text-align:center;margin:18px 0">ATAU · Persetujuan admin wajib untuk bergabung</p><form id="join-workspace"><div class="form-grp"><label>Kode undangan</label><input class="field" name="code" required placeholder="8 karakter" style="text-transform:uppercase"></div><button class="btn outline block" type="submit">Gabung tim</button></form>${state.workspaces.length>1?`<div class="detail-head"><h3>Tim yang diikuti</h3></div>${state.workspaces.map(w=>`<button class="btn ${state.workspace?.id===w.id?'primary':'ghost'} sm" style="margin:3px" data-action="switch-workspace" data-id="${esc(w.id)}">${esc(w.name)}</button>`).join('')}`:''}`)}
+function approveLinkModal(){
+ const userId=state.modal?.id;
+ const member=state.members.find(m=>m.user_id===userId);
+ if(!isAdmin()||!member||!['pending','approved'].includes(member.status))return modalFrame('Akun tidak dapat ditautkan','Perbarui daftar anggota terlebih dahulu','<p>Permintaan sudah berubah atau tidak tersedia.</p>');
+ if(state.staffLinks.some(l=>l.user_id===userId))return modalFrame('Akun sudah tertaut','', '<p>Akun ini sudah memiliki nama Excel.</p>');
+ const available=IMPORTED.staff.filter(p=>!state.staffLinks.some(l=>l.staff_key===p.key));
+ const selections=available.map(p=>`<option value="${esc(p.key)}">${esc(p.name)} · ${p.racks.length} rak</option>`).join('');
+ return modalFrame('Setujui + Tautkan + Sinkronkan',`Akun: ${memberName(userId)}`,
+ `<div class="notice info" style="margin-bottom:14px">Pilih nama karyawan <b>berdasarkan identitas sebenarnya</b>, bukan hanya kemiripan nama. Admin tetap memutuskan penautannya.</div>
+ ${available.length?`<form id="approve-link-form">
+ <input type="hidden" name="user_id" value="${esc(userId)}">
+ <div class="form-grp"><label>Nama sesuai file Excel</label><select class="field" name="staff_key" required>
+ <option value="">— Pilih nama karyawan —</option>${selections}</select></div>
+ <p class="small muted">Klik Simpan untuk ${member.status==='pending'?'menyetujui akun, ':''}menghubungkan identitas dan membuat jadwal serta nomor rak. Riwayat checklist tidak dihapus.</p>
+ <button class="btn primary block" type="submit">✓ ${member.status==='pending'?'Setujui + Tautkan + Sinkronkan':'Tautkan + Sinkronkan'}</button>
+ </form>`:'<p>Semua nama Excel telah ditautkan. Impor Excel lebih dulu bila ada karyawan baru.</p>'}
+ ${member.status==='pending'?`<button class="btn outline block" style="margin-top:12px" type="button" data-action="approve-without-link" data-id="${esc(userId)}">Setujui saja (tautkan nanti)</button>`:''}`);
+}
+async function approveLink(form){
+ if(state.mode!=='cloud'||!isAdmin()||!state.workspace)throw new Error('Hanya admin tim yang bisa menautkan akun.');
+ const fd=new FormData(form),userId=String(fd.get('user_id')||''),key=String(fd.get('staff_key')||'');
+ const member=state.members.find(m=>m.user_id===userId),person=IMPORTED.staff.find(p=>p.key===key);
+ if(!member||!['pending','approved'].includes(member.status)||!person)throw new Error('Pilih akun dan nama Excel yang valid.');
+ if(state.staffLinks.some(l=>l.user_id===userId||l.staff_key===key))throw new Error('Akun atau nama Excel sudah tertaut.');
+ if(!confirm(`Pastikan identitas berikut benar:\nAkun login: ${memberName(userId)}\nNama Excel: ${person.name}\nRak: ${person.racks.length}\n\nLanjutkan ${member.status==='pending'?'persetujuan, ':''}penautan dan sinkronisasi?`))return;
+ const {data,error}=await state.db.rpc('approve_and_link_imported_staff',{
+  p_workspace:state.workspace.id,p_user:userId,p_staff_key:key
+ });
+ if(error)throw error;
+ state.modal=null;
+ await refreshCloud();
+ notify(`${data?.staff_name||person.name} berhasil ditautkan · ${data?.racks??person.racks.length} rak · ${data?.scheduled_shifts??0} jadwal tersinkron.`);
+}
 async function manageMember(userId,action){
  if(state.mode!=='cloud'||!state.workspace||!isAdmin())throw new Error('Hanya admin tim yang boleh mengelola akun.');
  const member=state.members.find(m=>m.user_id===userId);
@@ -227,7 +311,7 @@ async function manageMember(userId,action){
  if(error)throw error;
  await refreshCloud();notify(`Akun ${name} berhasil diperbarui.`);
 }
-function modalHtml(){if(!state.modal)return '';if(state.modal.type==='task')return taskForm(state.modal.id?state.tasks.find(t=>t.id===state.modal.id):null);if(state.modal.type==='detail')return taskDetail(state.modal.id);if(state.modal.type==='config')return configModal();if(state.modal.type==='workspace')return workspaceModal();if(state.modal.type==='shift-point')return shiftPointForm(state.modal.id||null);return ''}
+function modalHtml(){if(!state.modal)return '';if(state.modal.type==='task')return taskForm(state.modal.id?state.tasks.find(t=>t.id===state.modal.id):null);if(state.modal.type==='detail')return taskDetail(state.modal.id);if(state.modal.type==='config')return configModal();if(state.modal.type==='workspace')return workspaceModal();if(state.modal.type==='approve-link')return approveLinkModal();if(state.modal.type==='shift-point')return shiftPointForm(state.modal.id||null);return ''}
 function modal(type,id){state.modal={type,id};render()}
 function closeModal(){state.modal=null;render()}
 async function afterMutation(){if(state.mode==='demo'){persistDemo();render();checkReminders()}else await refreshCloud()}
@@ -558,7 +642,13 @@ document.addEventListener('click',async e=>{
  const target=e.target.closest('[data-action]');if(!target)return;
  const a=target.dataset.action,id=target.dataset.id;
  try{
- if(a==='tab'){state.tab=target.dataset.tab;state.modal=null;state.search='';render();window.scrollTo(0,0)}
+ if(a==='personal-theme'){
+  const choice=String(target.dataset.theme||'');
+  if(!PERSONAL_THEMES.some(t=>t.id===choice))throw new Error('Tema tidak tersedia');
+  try{localStorage.setItem(personalThemeKey(),choice)}catch{throw new Error('Penyimpanan tema pada HP ini tidak tersedia')}
+  applyPersonalTheme();render();notify('Tema '+PERSONAL_THEMES.find(t=>t.id===choice).name+' aktif di akun ini');
+ }
+ else if(a==='tab'){state.tab=target.dataset.tab;state.modal=null;state.search='';render();window.scrollTo(0,0)}
  else if(a==='filter'){state.filter=target.dataset.filter;render()}
  else if(a==='report-range'){state.reportRange=target.dataset.value;render()}
  else if(a==='camera-open'){await openCamera(target.dataset.kind,id)}
@@ -570,6 +660,8 @@ document.addEventListener('click',async e=>{
  else if(a==='open-config'){modal('config')}
  else if(a==='open-workspace'){modal('workspace')}
  else if(a==='refresh-requests'){await loadAll();notify('Status permintaan sudah diperbarui')}
+ else if(a==='approve-link-open'){modal('approve-link',id)}
+ else if(a==='approve-without-link'){state.modal=null;await manageMember(id,'approve')}
  else if(a==='manage-member'){await manageMember(id,target.dataset.memberAction)}
  else if(a==='status'){await updateStatus(id,target.dataset.status)}
  else if(a==='delete-check'){await deleteCheck(id)}
@@ -627,7 +719,7 @@ document.addEventListener('change',async e=>{
  }catch(err){showError(err);render()}
 });
 document.addEventListener('submit',async e=>{
- const form=e.target;if(!['auth-form','create-workspace','join-workspace','task-form','add-check','config-form','shift-roster-form','rack-assign-form','staff-link-form','shift-point-form'].includes(form.id))return;
+ const form=e.target;if(!['auth-form','create-workspace','join-workspace','task-form','add-check','config-form','shift-roster-form','rack-assign-form','staff-link-form','approve-link-form','shift-point-form'].includes(form.id))return;
  e.preventDefault();if(state.busy)return;state.busy=true;const button=form.querySelector('button[type=submit]'),orig=button?.textContent;if(button){button.disabled=true;button.textContent='Memproses…'}
  try{
  if(form.id==='auth-form'){
@@ -649,6 +741,7 @@ document.addEventListener('submit',async e=>{
  else if(form.id==='shift-roster-form')await saveShiftRoster(form);
  else if(form.id==='rack-assign-form')await saveRackAssignment(form);
  else if(form.id==='staff-link-form')await saveStaffLink(form);
+ else if(form.id==='approve-link-form')await approveLink(form);
  else if(form.id==='shift-point-form')await saveShiftPoint(form);
  else if(form.id==='task-form')await saveTask(form);
  else if(form.id==='add-check')await addCheck(form);
@@ -1035,12 +1128,16 @@ function aiStatusBadge(photo){
  return `<span class="ai-pill ${esc(status)}">${esc(labels[status]||'Perlu diperiksa')}</span>`;
 }
 function rackProgressDetails(s=state.shiftNumber){
- const schedule=shiftScheduled(s),racks=rackListForShift(s),p=rackProgress(s);
+ const schedule=shiftScheduled(s),allRacks=rackListForShift(s),
+ racks=state.mode==='demo'?allRacks:allRacks.filter(r=>r.user_id===state.user?.id),
+ p={done:racks.filter(r=>rackCheckedWithPhoto(r,s)).length,total:racks.length,
+ photos:racks.filter(r=>!!latestRackPhoto(r.id,s)).length,
+ warnings:racks.filter(r=>latestRackPhoto(r.id,s)?.ai_status==='warning'&&!rackCheckedWithPhoto(r,s)).length};
  if(!schedule.length)return `<div class="rack-panel"><div class="notice info">Belum ada jadwal Shift ${s}; tambah petugas agar foto dan ceklis rak aktif.</div></div>`;
- if(!racks.length)return `<div class="rack-panel"><div class="notice info">Daftar rak petugas belum dimasukkan.</div></div>`;
+ if(!racks.length)return `<div class="rack-panel"><div class="notice info">${state.mode!=='demo'?'Belum ada rak yang ditugaskan ke akun Anda pada Shift '+s+'. Minta admin menyinkronkan PIC rak.':'Daftar rak petugas belum dimasukkan.'}</div></div>`;
  const groups=[...new Set(racks.map(x=>x.user_id))];
  return `<div class="rack-panel"><div class="rack-head"><b>Foto kamera + crop tiap rak</b><span>${p.done}/${p.total} selesai</span></div>
- <div class="rack-target-stats"><span>📷 ${p.photos}/${p.total} foto rak</span><span>⚠ ${p.warnings} perlu dicek</span><span>✓ ${p.done} terverifikasi</span></div>
+ <div class="rack-target-stats">${state.mode!=='demo'?'<span>Rak saya saja</span>':''}<span>📷 ${p.photos}/${p.total} foto rak</span><span>⚠ ${p.warnings} perlu dicek</span><span>✓ ${p.done} terverifikasi</span></div>
  ${groups.map(u=>{
   const list=racks.filter(r=>r.user_id===u),finished=list.filter(r=>rackCheckedWithPhoto(r,s)).length;
   return `<div class="rack-person"><div class="rack-person-head"><b>${esc(memberName(u))}</b><small>${finished}/${list.length} rak</small></div>
