@@ -11,11 +11,18 @@ const niceTime = v => v ? new Intl.DateTimeFormat('id-ID',{day:'numeric',month:'
 const dayLabel = () => new Intl.DateTimeFormat('id-ID',{weekday:'long',day:'numeric',month:'long',year:'numeric'}).format(new Date());
 const getIso = (days=0,h=18,m=0) => { const d=new Date(); d.setDate(d.getDate()+days);d.setHours(h,m,0,0);return d.toISOString(); };
 const dateLocal = v => {if(!v)return '';const d=date(v),pad=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;};
-const state={mode:'demo',db:null,user:{id:'demo-me',email:'demo@taskmate.local'},workspace:null,workspaces:[],joinRequests:[],members:[],profiles:[],tasks:[],checks:[],evidence:[],tab:(new URLSearchParams(location.search).get('tab')==='shift'?'shift':'home'),shiftDate:localDay(),shiftNumber:[1,2,3].includes(Number(new URLSearchParams(location.search).get('shift')))?Number(new URLSearchParams(location.search).get('shift')):1,shiftFilter:'all',shiftRoster:[],shiftLogs:[],shiftTaskVersions:[],shiftTaskConfigError:'',showTaskManager:false,shiftProofs:[],rackAssignments:[],rackChecks:[],rackPhotos:[],mapPhotos:[],shiftReady:false,shiftError:'',rackError:'',staffLinks:[],staffLinkError:'',filter:'all',priority:'all',search:'',reportRange:'week',modal:null,lastSync:null,realtime:null,reloading:false,reloadQueued:false,busy:false,authTab:'login',notice:''};
+const state={mode:'demo',db:null,user:{id:'demo-me',email:'demo@taskmate.local'},workspace:null,workspaces:[],joinRequests:[],members:[],profiles:[],tasks:[],checks:[],evidence:[],tab:(new URLSearchParams(location.search).get('tab')==='shift'?'shift':'home'),shiftDate:localDay(),shiftNumber:[1,2,3].includes(Number(new URLSearchParams(location.search).get('shift')))?Number(new URLSearchParams(location.search).get('shift')):1,shiftFilter:'all',shiftView:'mine',shiftRoster:[],shiftLogs:[],shiftAdmins:[],shiftPics:[],shiftTaskVersions:[],shiftTaskConfigError:'',showTaskManager:false,shiftProofs:[],rackAssignments:[],rackChecks:[],rackPhotos:[],mapPhotos:[],shiftReady:false,shiftError:'',rackError:'',staffLinks:[],staffLinkError:'',filter:'all',priority:'all',search:'',reportRange:'week',photoReportDate:localDay(),photoReportShift:'all',photoReportPic:'all',photoReportItems:[],photoReportLoaded:false,photoReportBusy:false,photoReportError:'',photoReportWorkspaceId:null,modal:null,lastSync:null,realtime:null,reloading:false,reloadQueued:false,busy:false,authTab:'login',notice:''};
 let toastTimer, reloadTimer;
 const signedThumbs = new Map();
 const priorityNames={high:'Tinggi',normal:'Sedang',low:'Rendah'}, statusNames={todo:'Belum mulai',doing:'Dikerjakan',done:'Selesai'};
-const icons={home:'◫',shift:'◷',tasks:'☑',reports:'▤',team:'♧',settings:'⚙'};
+const icons={
+ home:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M5.5 9.5V20h13V9.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+ shift:'<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 7.5v5l3.5 2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+ tasks:'<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="14" height="16" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8.5 9.5h7M8.5 13h7M8.5 16.5h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M8 4.5h8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+ reports:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 19V10M12 19V5M18 19v-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M4 20.5h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+ team:'<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="9" r="3" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="17" cy="10" r="2.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M4.5 18c.9-2.6 3-4 5.7-4 2.8 0 4.9 1.4 5.8 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M14.5 17c.55-1.58 1.8-2.53 3.65-2.92" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+ settings:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l1.2 2.1 2.4.5-.4 2.4 1.7 1.7-1.7 1.7.4 2.4-2.4.5L12 20.5l-1.2-2.1-2.4-.5.4-2.4-1.7-1.7 1.7-1.7-.4-2.4 2.4-.5L12 3.5z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><circle cx="12" cy="12" r="2.9" fill="none" stroke="currentColor" stroke-width="1.9"/></svg>'
+};
 const tabs=[['home','Dashboard'],['shift','Checklist Shift'],['tasks','Tugas'],['reports','Laporan'],['team','Tim'],['settings','Pengaturan']];
 
 // v13: hanya preferensi tampilan lokal berdasarkan akun login di perangkat ini.
@@ -39,10 +46,16 @@ function personalTheme(){
  try{const saved=localStorage.getItem(personalThemeKey());return PERSONAL_THEMES.some(x=>x.id===saved)?saved:'classic'}
  catch{return 'classic'}
 }
+function personalShapeKey(){return 'taskmate-personal-shape-v1:'+String(state.user?.id||'guest')}
+function personalShape(){
+ try{const choice=localStorage.getItem(personalShapeKey());if(choice==='neo'||choice==='soft')return choice}catch{}
+ return personalTheme()==='classic'?'soft':'neo';
+}
 function applyPersonalTheme(){
  const id=personalTheme(),theme=PERSONAL_THEMES.find(x=>x.id===id)||PERSONAL_THEMES[0];
  document.documentElement.dataset.tmTheme=id;
- const meta=document.querySelector('meta[name="theme-color"]');if(meta)meta.setAttribute('content',theme.bg);
+ document.documentElement.dataset.tmShape=personalShape();
+ const meta=document.querySelector('meta[name="theme-color"]');const barColor=theme.dark?theme.bg:'#1f2430';if(meta)meta.setAttribute('content',barColor);document.documentElement.style.setProperty('--tm-statusbar-runtime',barColor);
 }
 function personalThemePicker(){
  const selected=personalTheme();
@@ -59,6 +72,13 @@ function personalThemePicker(){
    </span><span class="tm-theme-option-title">${t.name}<span aria-hidden="true">${t.id===selected?'✓':''}</span></span>
    <span class="tm-theme-option-desc">${t.subtitle}</span>
   </button>`).join('')}</div>
+  <div class="tm-shape-picker" aria-label="Bentuk kartu aplikasi">
+   <div class="tm-shape-heading"><strong>Bentuk kartu</strong><span>Pilih bentuk bebas dari warna tema</span></div>
+   <div class="tm-shape-buttons">
+    <button type="button" class="tm-shape-option ${personalShape()==='neo'?'selected':''}" data-action="personal-shape" data-shape="neo" aria-pressed="${personalShape()==='neo'}"><span class="tm-shape-symbol">▣</span><span><b>Folder 3D</b><small>Tebal, tab warna & bayangan tegas</small></span></button>
+    <button type="button" class="tm-shape-option ${personalShape()==='soft'?'selected':''}" data-action="personal-shape" data-shape="soft" aria-pressed="${personalShape()==='soft'}"><span class="tm-shape-symbol">◫</span><span><b>Kartu halus</b><small>Minimalis seperti sebelumnya</small></span></button>
+   </div>
+  </div>
   <div class="tm-theme-privacy">✓ Tidak mengubah akun lain &nbsp;·&nbsp; ✓ Tidak mengubah data pekerjaan &nbsp;·&nbsp; ✓ Tidak perlu Supabase</div>
  </section>`;
 }
@@ -103,16 +123,22 @@ async function start(){
  if(c.url&&c.key){
   if(!window.supabase){document.querySelector('#app').innerHTML='<div class="boot"><h2>Koneksi diperlukan</h2><p>Supabase belum termuat. Periksa internet, lalu muat ulang.</p></div>';return;}
   try{state.db=window.supabase.createClient(c.url,c.key,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});state.mode='cloud';const {data,error}=await state.db.auth.getSession();if(error)throw error;state.user=data.session?.user||null;
-   state.db.auth.onAuthStateChange((event,session)=>{if(event==='INITIAL_SESSION')return;state.user=session?.user||null;if(event==='SIGNED_IN'||event==='SIGNED_OUT'){setTimeout(()=>loadAll().catch(showError),0)}});
+   state.db.auth.onAuthStateChange((event,session)=>{if(event==='INITIAL_SESSION')return;state.user=session?.user||null;if(event==='SIGNED_IN'||event==='SIGNED_OUT'){state.shiftView='mine';setTimeout(()=>loadAll().catch(showError),0)}});
    if(state.user)await loadAll();else render();
   }catch(e){document.querySelector('#app').innerHTML='<div class="boot"><h2>Supabase gagal terhubung</h2><p>Periksa internet dan konfigurasi aplikasi.</p></div>';console.error(e);return;}
  }else{state.mode='demo';setDemo();render()}
  if('serviceWorker' in navigator && location.protocol!=='file:')navigator.serviceWorker.register('./sw.js').catch(()=>{});
- setInterval(checkReminders,60000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)checkReminders()});
+ setInterval(checkReminders,60000);
+ document.addEventListener('visibilitychange',()=>{
+  if(document.hidden)return;
+  checkReminders();
+  if(state.mode==='cloud'&&state.user&&navigator.onLine&&(!state.lastSync||Date.now()-new Date(state.lastSync).getTime()>60000))syncNow();
+ });
+ window.addEventListener('online',()=>{if(state.mode==='cloud'&&state.user)syncNow()});
 }
 async function loadAll(){
  if(state.mode!=='cloud'){setDemo();render();return}
- if(!state.user){state.workspaces=[];state.joinRequests=[];state.workspace=null;state.tasks=[];state.shiftLogs=[];state.shiftRoster=[];state.shiftTaskVersions=[];state.shiftProofs=[];state.rackAssignments=[];state.rackChecks=[];state.rackPhotos=[];state.mapPhotos=[];state.staffLinks=[];unsubscribe();render();return}
+ if(!state.user){state.photoReportItems=[];state.photoReportLoaded=false;state.photoReportWorkspaceId=null;state.workspaces=[];state.joinRequests=[];state.workspace=null;state.tasks=[];state.shiftLogs=[];state.shiftRoster=[];state.shiftTaskVersions=[];state.shiftAdmins=[];state.shiftPics=[];state.shiftProofs=[];state.rackAssignments=[];state.rackChecks=[];state.rackPhotos=[];state.mapPhotos=[];state.staffLinks=[];unsubscribe();render();return}
  const [{data:list,error},{data:requests,error:requestError}]=await Promise.all([
   state.db.from('workspace_members').select('workspace_id,role,status,workspaces(id,name,invite_code,created_by)').eq('user_id',state.user.id),
   state.db.rpc('get_my_workspace_requests')
@@ -122,7 +148,8 @@ async function loadAll(){
  state.workspaces=(list||[]).filter(x=>x.status==='approved').map(x=>x.workspaces).filter(Boolean);
  const preferred=localStorage.getItem('taskmate-current-workspace');
  state.workspace=state.workspaces.find(x=>x.id===preferred)||state.workspaces[0]||null;
- if(!state.workspace){state.members=[];state.tasks=[];state.checks=[];state.evidence=[];state.shiftLogs=[];state.shiftRoster=[];state.shiftTaskVersions=[];state.shiftProofs=[];state.rackAssignments=[];state.rackChecks=[];state.rackPhotos=[];state.mapPhotos=[];unsubscribe();render();return}
+ if(state.photoReportWorkspaceId!==state.workspace?.id){state.photoReportItems=[];state.photoReportLoaded=false;state.photoReportWorkspaceId=state.workspace?.id||null;}
+ if(!state.workspace){state.members=[];state.tasks=[];state.checks=[];state.evidence=[];state.shiftLogs=[];state.shiftRoster=[];state.shiftTaskVersions=[];state.shiftAdmins=[];state.shiftPics=[];state.shiftProofs=[];state.rackAssignments=[];state.rackChecks=[];state.rackPhotos=[];state.mapPhotos=[];unsubscribe();render();return}
  await refreshCloud(true);
 }
 async function refreshCloud(resubscribe=false){
@@ -156,20 +183,33 @@ function subscribe(wid){
  .on('postgres_changes',{event:'*',schema:'public',table:'workspace_members',filter:`workspace_id=eq.${wid}`},requestReload)
  .on('postgres_changes',{event:'*',schema:'public',table:'shift_roster',filter:`workspace_id=eq.${wid}`},requestReload)
  .on('postgres_changes',{event:'*',schema:'public',table:'shift_task_versions',filter:`workspace_id=eq.${wid}`},requestReload)
+ .on('postgres_changes',{event:'*',schema:'public',table:'shift_shift_admins',filter:`workspace_id=eq.${wid}`},requestReload)
+ .on('postgres_changes',{event:'*',schema:'public',table:'shift_task_pics',filter:`workspace_id=eq.${wid}`},requestReload)
  .on('postgres_changes',{event:'*',schema:'public',table:'shift_logs',filter:`workspace_id=eq.${wid}`},requestReload)
  .on('postgres_changes',{event:'*',schema:'public',table:'shift_evidence'},requestReload)
  .on('postgres_changes',{event:'*',schema:'public',table:'shift_rack_assignments',filter:`workspace_id=eq.${wid}`},requestReload)
  .on('postgres_changes',{event:'*',schema:'public',table:'shift_rack_checks',filter:`workspace_id=eq.${wid}`},requestReload)
  .on('postgres_changes',{event:'*',schema:'public',table:'shift_staff_links',filter:`workspace_id=eq.${wid}`},requestReload)
+ .on('postgres_changes',{event:'*',schema:'public',table:'shift_staff_seed',filter:`workspace_id=eq.${wid}`},requestReload)
  .on('postgres_changes',{event:'*',schema:'public',table:'shift_rack_photos',filter:`workspace_id=eq.${wid}`},requestReload)
  .on('postgres_changes',{event:'*',schema:'public',table:'shift_map_photos',filter:`workspace_id=eq.${wid}`},requestReload)
  .subscribe();state.realtime=chan;
 }
 function requestReload(){clearTimeout(reloadTimer);reloadTimer=setTimeout(()=>{if(state.mode==='cloud'&&state.user)refreshCloud().catch(showError)},450)}
-async function syncNow(){try{if(state.mode==='cloud')await loadAll();else {persistDemo();render()}notify('Data sudah diperbarui')}catch(e){showError(e)}}
+async function syncNow(){
+ if(state.reloading)return;
+ state.reloading=true;
+ try{
+  if(state.mode==='cloud'){
+   if(!navigator.onLine)throw new Error('HP sedang offline. Sambungkan internet lalu coba sinkron ulang.');
+   await loadAll();
+  }else {persistDemo();render()}
+  notify('✓ Data HP sudah diperbarui dari Cloud · '+new Intl.DateTimeFormat('id-ID',{hour:'2-digit',minute:'2-digit'}).format(new Date()));
+ }catch(e){showError(e)}finally{state.reloading=false}
+}
 function shell(inner){
  const headline={home:'Dashboard',shift:'Checklist Shift 1–3',tasks:'Daftar Tugas',reports:'Laporan Pekerjaan',team:'Tim & Anggota',settings:'Pengaturan'}[state.tab];
- return `<div class="app-shell"><aside class="sidebar"><div class="logo"><mark>✓</mark> TaskMate</div><div class="nav-caption">MENU UTAMA</div>${tabs.map(([id,t])=>`<button class="side-item ${state.tab===id?'active':''}" data-action="tab" data-tab="${id}"><span class="ico">${icons[id]}</span>${t}</button>`).join('')}<div class="sidebar-bottom"><h4>✨ Satu tim, satu progres.</h4><p>Atur tugas, pantau laporan, dan simpan bukti pekerjaan dalam satu tempat.</p></div></aside><main class="main"><header class="topbar"><div class="top-left"><div class="eyebrow">${state.workspace?esc(state.workspace.name):'TaskMate'} / ${dayLabel()}</div><h1>${headline}</h1></div><div class="top-actions"><span class="chip ${state.mode==='demo'?'demo':''}"><i class="dot"></i>${state.mode==='demo'?'Mode demo':'Tersambung'}</span><div class="avatar" title="${esc(currentUserName())}">${esc(initials(currentUserName()))}</div></div></header>${state.mode==='demo'?`<div class="notice info"><span>ⓘ</span><span><b>Mode demo.</b> Data hanya tersimpan di HP ini. <button class="link-button" data-action="open-config">Hubungkan Supabase</button> untuk sinkron antar-HP.</span></div>`:''}${state.notice?`<div class="notice">${esc(state.notice)}</div>`:''}${inner}</main>${state.tab==='shift'?'':'<button class="floating" aria-label="Tambah tugas" data-action="new-task">+</button>'}<nav class="bottom-nav">${tabs.map(([id,t])=>`<button class="${state.tab===id?'active':''}" data-action="tab" data-tab="${id}"><span class="ico">${icons[id]}</span><span>${t==='Pengaturan'?'Setelan':t==='Checklist Shift'?'Shift':t}</span></button>`).join('')}</nav></div>`;
+ return `<div class="app-shell"><aside class="sidebar"><div class="logo"><mark>✓</mark> TaskMate</div><div class="nav-caption">MENU UTAMA</div>${tabs.map(([id,t])=>`<button class="side-item ${state.tab===id?'active':''}" data-action="tab" data-tab="${id}"><span class="ico">${icons[id]}</span>${t}</button>`).join('')}<div class="sidebar-bottom"><h4>✨ Satu tim, satu progres.</h4><p>Atur tugas, pantau laporan, dan simpan bukti pekerjaan dalam satu tempat.</p></div></aside><main class="main"><header class="topbar"><div class="top-left"><div class="eyebrow">${state.workspace?esc(state.workspace.name):'TaskMate'} / ${dayLabel()}</div><h1>${headline}</h1></div><div class="top-actions"><button type="button" class="tm-cloud-sync" data-action="sync" aria-label="Sinkron ulang data dari cloud" title="Sinkronkan sekarang dari Supabase"><span class="tm-sync-icon" aria-hidden="true">↻</span><span class="tm-sync-word">Sinkron</span></button><span class="chip ${state.mode==='demo'?'demo':''}"><i class="dot"></i>${state.mode==='demo'?'Mode demo':'Tersambung'}</span><div class="avatar" title="${esc(currentUserName())}">${esc(initials(currentUserName()))}</div></div></header>${state.mode==='demo'?`<div class="notice info"><span>ⓘ</span><span><b>Mode demo.</b> Data hanya tersimpan di HP ini. <button class="link-button" data-action="open-config">Hubungkan Supabase</button> untuk sinkron antar-HP.</span></div>`:''}${state.notice?`<div class="notice">${esc(state.notice)}</div>`:''}${inner}</main>${state.tab==='shift'?'':'<button class="floating" aria-label="Tambah tugas" data-action="new-task">+</button>'}<nav class="bottom-nav">${tabs.map(([id,t])=>`<button class="${state.tab===id?'active':''}" data-action="tab" data-tab="${id}"><span class="ico">${icons[id]}</span><span>${t==='Pengaturan'?'Setelan':t==='Checklist Shift'?'Shift':t}</span></button>`).join('')}</nav></div>`;
 }
 function metric(label,value,icon,color,foot){return `<div class="metric"><div class="metric-top"><span class="metric-label">${label}</span><span class="metric-icon ${color}">${icon}</span></div><strong>${value}</strong><div class="metric-foot">${foot}</div></div>`}
 function taskCard(t){
@@ -195,8 +235,175 @@ function reportItems(){
 }
 function reportsPage(){
  const a=reportItems(),done=a.filter(t=>t.status==='done'),late=a.filter(overdue);
- return `<div class="section-header" style="margin-top:0"><div><h2>Rekap laporan pekerjaan</h2><p>Ringkasan tugas beserta checklist dan bukti pengerjaan</p></div><div class="seg">${[['today','Hari ini'],['week','7 hari'],['month','30 hari']].map(([v,l])=>`<button data-action="report-range" data-value="${v}" class="${state.reportRange===v?'active':''}">${l}</button>`).join('')}</div></div><div class="metrics">${metric('Total laporan',a.length,'▤','','Dalam periode ini')}${metric('Selesai',done.length,'✓','green','Tuntas dikerjakan')}${metric('Belum selesai',a.length-done.length,'⌛','amber','Sedang menunggu')}${metric('Terlambat',late.length,'!','red','Belum terselesaikan')}</div><div class="section-header"><div><h2>Detail laporan</h2><p>Unduh sebagai CSV atau bagikan ke WhatsApp</p></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn outline sm" data-action="copy-report">Salin laporan</button><button class="btn primary sm" data-action="export-csv">↓ Ekspor CSV</button></div></div><div class="panel table-scroll" style="padding:0">${a.length?`<table class="report-table"><thead><tr><th>Pekerjaan</th><th>Petugas</th><th>Deadline</th><th>Checklist</th><th>Bukti</th><th>Status</th></tr></thead><tbody>${a.map(t=>`<tr><td>${esc(t.title)}</td><td>${esc(memberName(t.assignee_id))}</td><td>${esc(nice(t.due_at))}</td><td>${taskChecks(t.id).filter(x=>x.is_checked).length}/${taskChecks(t.id).length}</td><td>${taskProofs(t.id).length} file</td><td><span class="status-pill ${t.status}">${statusNames[t.status]}</span></td></tr>`).join('')}</tbody></table>`:empty('▤','Belum ada laporan','Tidak ada tugas yang sesuai dengan periode ini.')}</div><div class="notice info" style="margin-top:16px">ⓘ &nbsp; Data laporan mengikuti status tugas dan checklist terbaru yang sudah disimpan.</div>`;
+ return photoReportPanel()+`<div class="section-header" style="margin-top:0"><div><h2>Rekap laporan pekerjaan</h2><p>Ringkasan tugas beserta checklist dan bukti pengerjaan</p></div><div class="seg">${[['today','Hari ini'],['week','7 hari'],['month','30 hari']].map(([v,l])=>`<button data-action="report-range" data-value="${v}" class="${state.reportRange===v?'active':''}">${l}</button>`).join('')}</div></div><div class="metrics">${metric('Total laporan',a.length,'▤','','Dalam periode ini')}${metric('Selesai',done.length,'✓','green','Tuntas dikerjakan')}${metric('Belum selesai',a.length-done.length,'⌛','amber','Sedang menunggu')}${metric('Terlambat',late.length,'!','red','Belum terselesaikan')}</div><div class="section-header"><div><h2>Detail laporan</h2><p>Unduh sebagai CSV atau bagikan ke WhatsApp</p></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn outline sm" data-action="copy-report">Salin laporan</button><button class="btn primary sm" data-action="export-csv">↓ Ekspor CSV</button></div></div><div class="panel table-scroll" style="padding:0">${a.length?`<table class="report-table"><thead><tr><th>Pekerjaan</th><th>Petugas</th><th>Deadline</th><th>Checklist</th><th>Bukti</th><th>Status</th></tr></thead><tbody>${a.map(t=>`<tr><td>${esc(t.title)}</td><td>${esc(memberName(t.assignee_id))}</td><td>${esc(nice(t.due_at))}</td><td>${taskChecks(t.id).filter(x=>x.is_checked).length}/${taskChecks(t.id).length}</td><td>${taskProofs(t.id).length} file</td><td><span class="status-pill ${t.status}">${statusNames[t.status]}</span></td></tr>`).join('')}</tbody></table>`:empty('▤','Belum ada laporan','Tidak ada tugas yang sesuai dengan periode ini.')}</div><div class="notice info" style="margin-top:16px">ⓘ &nbsp; Data laporan mengikuti status tugas dan checklist terbaru yang sudah disimpan.</div>`;
 }
+// TaskMate v19: galeri bukti foto Shift (cloud only), per tanggal/shift/PIC.
+// Tidak ada data foto yang disalin ke GitHub; signed URL berumur pendek.
+function photoReportFiltered(){
+ return state.photoReportItems.filter(row=>(state.photoReportShift==='all'||row.shift===Number(state.photoReportShift))
+  &&(state.photoReportPic==='all'||row.userId===state.photoReportPic));
+}
+function photoReportPicName(uid){return getProfile(uid)?.full_name||'Petugas belum dikenal'}
+function photoReportClock(ts){
+ if(!ts)return 'Tidak tercatat';
+ const d=new Date(ts);if(!Number.isFinite(d.getTime()))return 'Tidak valid';
+ return new Intl.DateTimeFormat('id-ID',{timeZone:'Asia/Jakarta',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}).format(d)+' WIB';
+}
+function photoReportPanel(){
+ if(!isAdmin())return '';
+ const rows=photoReportFiltered();
+ const people=[...new Set(state.photoReportItems.map(x=>x.userId).filter(Boolean))];
+ const options=[...new Set([...people,...state.members.filter(x=>x.status==='approved').map(x=>x.user_id)])]
+   .map(id=>({id,name:photoReportPicName(id)})).sort((a,b)=>a.name.localeCompare(b.name,'id'));
+ const all=state.photoReportItems.length;
+ const loading=state.photoReportBusy;
+ const racks=rows.filter(x=>x.kind==='rack').length;
+ const maps=rows.filter(x=>x.kind==='map').length;
+ const checks=rows.filter(x=>x.kind==='shift').length;
+ return `<section class="photo-report-panel" id="photo-report" aria-label="Laporan foto operasional">
+  <div class="photo-report-heading"><div><span class="photo-report-kicker">GALERI BUKTI CLOUD</span><h2>📸 Laporan Foto Shift</h2>
+    <p>Foto yang sudah tercatat di Supabase. Hanya Admin Tim yang dapat membuka galeri ini.</p></div>
+    <span class="photo-report-private">🔒 Cloud privat</span></div>
+  <div class="photo-report-filters">
+   <label>Tanggal kerja<input id="photo-report-date" type="date" class="field" value="${esc(state.photoReportDate)}" /></label>
+   <label>Shift<select id="photo-report-shift" class="field"><option value="all">Semua shift</option>${[1,2,3].map(n=>`<option value="${n}" ${state.photoReportShift===String(n)?'selected':''}>Shift ${n}</option>`).join('')}</select></label>
+   <label>PIC / petugas<select id="photo-report-pic" class="field"><option value="all">Semua petugas</option>${options.map(x=>`<option value="${esc(x.id)}" ${state.photoReportPic===x.id?'selected':''}>${esc(x.name)}</option>`).join('')}</select></label>
+  </div>
+  <div class="photo-report-toolbar">
+   <button type="button" class="btn soft sm" data-action="photo-report-load" ${loading?'disabled':''}>${loading?'Memuat foto…':'↻ Muat ulang foto'}</button>
+   <button type="button" class="btn primary sm" data-action="photo-report-pdf" ${!rows.length||loading?'disabled':''}>↓ Unduh PDF dengan foto (${rows.length})</button>
+  </div>
+  ${state.photoReportError?`<p class="photo-report-error" role="alert">${esc(state.photoReportError)}</p>`:''}
+  ${state.photoReportLoaded?`<div class="photo-report-stats"><span><b>${rows.length}</b> foto terpilih</span><span>${racks} rak</span><span>${maps} Map Do It</span><span>${checks} tugas shift</span></div>`:''}
+  ${!state.photoReportLoaded?`<p class="photo-report-empty">${loading?'Membaca bukti foto dari Supabase…':'Tekan “Muat ulang foto” untuk melihat bukti dari cloud.'}</p>`
+  :rows.length===0?`<p class="photo-report-empty">Belum ada foto terverifikasi dalam catatan database untuk filter ini. Periksa tanggal, shift, atau PIC. Foto yang hanya ada di Storage tetapi belum tercatat belum dianggap berhasil dikirim.</p>`
+  :`<div class="photo-report-grid">${rows.map(row=>`<article class="photo-report-card">
+   ${row.signedUrl?`<button class="photo-report-image" data-action="photo-report-open" data-id="${esc(row.id)}" title="Buka foto ukuran penuh"><img src="${esc(row.signedUrl)}" alt="Bukti foto ${esc(row.title)}" loading="lazy" referrerpolicy="no-referrer" /></button>`:`<div class="photo-report-image photo-report-nopreview">Preview tidak tersedia</div>`}
+   <div class="photo-report-info"><span class="photo-report-type">${esc(row.type)}</span><strong>${esc(row.title)}</strong>
+   <small>${esc(row.name)} · Shift ${row.shift}</small><small>📷 Diambil: ${esc(photoReportClock(row.capturedAt))}</small>
+   <small>☁ Diterima: ${esc(photoReportClock(row.receivedAt))}</small>
+   ${row.aiStatus?`<small>AI rak: ${esc(row.aiStatus)}</small>`:''}
+   <button type="button" class="btn outline sm" data-action="photo-report-open" data-id="${esc(row.id)}">Lihat foto</button></div>
+  </article>`).join('')}</div>`}
+  <p class="photo-report-foot">Foto asli tetap tersimpan di bucket privat Supabase. Galeri memakai link sementara; PDF diunduh ke perangkat, tidak disimpan kembali ke cloud. Total foto pada tanggal ini: ${all}.</p>
+ </section>`;
+}
+async function loadPhotoReport(){
+ if(!isAdmin()||state.mode!=='cloud'||!state.workspace)throw new Error('Laporan Foto Cloud hanya tersedia untuk Admin Tim yang sudah login.');
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(state.photoReportDate))throw new Error('Tanggal laporan tidak valid.');
+ const wid=state.workspace.id,day=state.photoReportDate,db=state.db;
+ state.photoReportBusy=true;state.photoReportError='';state.photoReportLoaded=false;render();
+ try{
+  const [rack, maps, logs, assignments]=await Promise.all([
+   db.from('shift_rack_photos').select('id,workspace_id,work_date,shift_number,assignment_id,user_id,uploaded_by,object_path,client_captured_at,server_received_at,created_at,ai_status').eq('workspace_id',wid).eq('work_date',day).order('created_at',{ascending:false}).limit(1000),
+   db.from('shift_map_photos').select('id,workspace_id,work_date,shift_number,user_id,uploaded_by,rack_note,object_path,client_captured_at,server_received_at,created_at').eq('workspace_id',wid).eq('work_date',day).order('created_at',{ascending:false}).limit(1000),
+   db.from('shift_logs').select('id,workspace_id,work_date,shift_number,item_key,completed_by').eq('workspace_id',wid).eq('work_date',day).limit(1000),
+   db.from('shift_rack_assignments').select('id,user_id,rack_name').eq('workspace_id',wid).limit(1000)
+  ]);
+  for(const q of [rack,maps,logs,assignments])if(q.error)throw q.error;
+  const rackNames=new Map((assignments.data||[]).map(x=>[x.id,x.rack_name]));
+  const shiftLogs=logs.data||[];
+  let shiftEvidence=[];
+  for(let i=0;i<shiftLogs.length;i+=100){
+   const ids=shiftLogs.slice(i,i+100).map(x=>x.id);
+   const r=await db.from('shift_evidence').select('id,log_id,uploaded_by,object_path,client_captured_at,server_received_at,created_at,mime_type').in('log_id',ids).limit(1000);
+   if(r.error)throw r.error;shiftEvidence.push(...(r.data||[]));
+  }
+  const logMap=new Map(shiftLogs.map(x=>[x.id,x]));
+  const rows=[];
+  for(const p of rack.data||[])rows.push({id:'rack:'+p.id,kind:'rack',type:'Sisir Harga',title:'Rak '+(rackNames.get(p.assignment_id)||'Kode rak tidak diketahui'),
+   userId:p.user_id,name:photoReportPicName(p.user_id),shift:p.shift_number,bucket:'shift-extra-evidence',path:p.object_path,
+   capturedAt:p.client_captured_at,receivedAt:p.server_received_at||p.created_at,aiStatus:p.ai_status,signedUrl:''});
+  for(const p of maps.data||[])rows.push({id:'map:'+p.id,kind:'map',type:'Map Do It',title:p.rack_note||'Foto display',
+   userId:p.user_id,name:photoReportPicName(p.user_id),shift:p.shift_number,bucket:'shift-extra-evidence',path:p.object_path,
+   capturedAt:p.client_captured_at,receivedAt:p.server_received_at||p.created_at,signedUrl:''});
+  for(const p of shiftEvidence){const l=logMap.get(p.log_id);if(!l)continue;if(!String(p.mime_type||'').startsWith('image/'))continue;
+   rows.push({id:'shift:'+p.id,kind:'shift',type:'Checklist Shift',title:(l.item_key||'Tugas').replace(/[-_]/g,' '),
+   userId:p.uploaded_by,name:photoReportPicName(p.uploaded_by),shift:l.shift_number,bucket:'shift-evidence',path:p.object_path,
+   capturedAt:p.client_captured_at,receivedAt:p.server_received_at||p.created_at,signedUrl:''});
+  }
+  rows.sort((a,b)=>String(b.receivedAt).localeCompare(String(a.receivedAt)));
+  // Batch signed URLs; data file tidak pernah disimpan dalam kode/HTML publik.
+  for(const bucket of ['shift-extra-evidence','shift-evidence']){
+   const grouped=rows.filter(x=>x.bucket===bucket&&x.path);
+   for(let i=0;i<grouped.length;i+=80){
+    const slice=grouped.slice(i,i+80);
+    const r=await db.storage.from(bucket).createSignedUrls(slice.map(x=>x.path),900);
+    if(r.error)throw r.error;
+    (r.data||[]).forEach((url,j)=>{if(slice[j]&&!url.error)slice[j].signedUrl=url.signedUrl||''});
+   }
+  }
+  if(state.workspace?.id!==wid||state.photoReportDate!==day)return;
+  state.photoReportItems=rows;state.photoReportLoaded=true;
+ }catch(e){state.photoReportError='Gagal memuat foto dari cloud: '+errMessage(e);state.photoReportItems=[];state.photoReportLoaded=true;}
+ finally{state.photoReportBusy=false;render()}
+}
+async function openPhotoReportFile(id){
+ if(!isAdmin()||state.mode!=='cloud')return;
+ const item=state.photoReportItems.find(x=>x.id===id);if(!item)throw new Error('Bukti foto tidak ditemukan dalam laporan.');
+ const tab=window.open('about:blank','_blank');
+ const r=await state.db.storage.from(item.bucket).createSignedUrl(item.path,120);
+ if(r.error){tab?.close();throw r.error}
+ if(tab)tab.location.href=r.data.signedUrl;
+ else window.location.href=r.data.signedUrl;
+}
+function photoReportJpeg(blob){
+ return new Promise((resolve,reject)=>{
+  const url=URL.createObjectURL(blob);const image=new Image();
+  image.onload=()=>{try{
+   const max=1250,ratio=Math.min(1,max/Math.max(image.naturalWidth,image.naturalHeight));
+   const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(image.naturalWidth*ratio));canvas.height=Math.max(1,Math.round(image.naturalHeight*ratio));
+   const ctx=canvas.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);
+   ctx.drawImage(image,0,0,canvas.width,canvas.height);
+   resolve({data:canvas.toDataURL('image/jpeg',0.74),ratio:canvas.width/canvas.height});
+  }catch(e){reject(e)}finally{URL.revokeObjectURL(url)}};
+  image.onerror=()=>{URL.revokeObjectURL(url);reject(new Error('Format gambar tidak terbaca'));};image.src=url;
+ });
+}
+async function exportPhotoReportPdf(){
+ if(!isAdmin())throw new Error('Laporan PDF khusus Admin Tim');
+ if(state.mode!=='cloud')throw new Error('Laporan PDF hanya dapat diunduh dari mode cloud');
+ const photos=photoReportFiltered();if(!photos.length)throw new Error('Tidak ada foto untuk filter ini.');
+ if(photos.length>100)throw new Error('Terlalu banyak foto untuk satu PDF di HP. Pilih satu shift atau PIC terlebih dahulu (maksimum 100 foto).');
+ if(!window.jspdf?.jsPDF)throw new Error('Pembuat PDF belum termuat. Pastikan HP memiliki koneksi internet dan refresh aplikasi.');
+ const {jsPDF}=window.jspdf;const pdf=new jsPDF({orientation:'portrait',unit:'mm',format:'a4',compress:true});
+ const w=210,h=297,margin=15;
+ pdf.setFillColor(25,38,62);pdf.rect(0,0,w,50,'F');pdf.setTextColor(255);pdf.setFont('helvetica','bold');pdf.setFontSize(18);pdf.text('TASKMATE | LAPORAN FOTO SHIFT',margin,26);
+ pdf.setFontSize(10);pdf.setTextColor(56,70,86);pdf.text('Tim: '+(state.workspace?.name||'-'),margin,66);
+ pdf.text('Tanggal kerja: '+state.photoReportDate,margin,74);
+ pdf.text('Shift: '+(state.photoReportShift==='all'?'Semua':state.photoReportShift),margin,82);
+ pdf.text('PIC: '+(state.photoReportPic==='all'?'Semua':photoReportPicName(state.photoReportPic)),margin,90);
+ pdf.text('Foto tercatat: '+photos.length,margin,98);
+ pdf.text('Dibuat: '+photoReportClock(new Date().toISOString()),margin,106);
+ pdf.setFontSize(10);pdf.setTextColor(100);pdf.text('Sumber: Supabase Storage privat + catatan database TaskMate.',margin,118);
+ pdf.setFontSize(9);pdf.text('Waktu HP pada foto perlu dibandingkan dengan waktu diterima server.',margin,125);
+ let no=0,fail=0;
+ for(const item of photos){
+  no++;pdf.addPage();pdf.setFillColor(25,38,62);pdf.rect(0,0,w,20,'F');pdf.setTextColor(255);pdf.setFontSize(10);pdf.setFont('helvetica','bold');pdf.text('FOTO BUKTI '+no+' / '+photos.length,margin,13);
+  pdf.setTextColor(38,51,67);pdf.setFont('helvetica','bold');pdf.setFontSize(14);pdf.text(pdf.splitTextToSize(item.title,180),margin,32);
+  pdf.setFont('helvetica','normal');pdf.setFontSize(9);
+  pdf.text('Jenis: '+item.type+' | Shift '+item.shift,margin,47);
+  pdf.text('PIC: '+item.name,margin,54);
+  pdf.text('Diambil: '+photoReportClock(item.capturedAt),margin,61);
+  pdf.text('Diterima server: '+photoReportClock(item.receivedAt),margin,68);
+  if(item.aiStatus)pdf.text('Status AI: '+item.aiStatus,margin,75);
+  let imageY=82;
+  try{
+   const res=await state.db.storage.from(item.bucket).createSignedUrl(item.path,120);
+   if(res.error)throw res.error;
+   const file=await fetch(res.data.signedUrl);if(!file.ok)throw new Error('HTTP '+file.status);
+   const jpg=await photoReportJpeg(await file.blob());
+   const maxW=180,maxH=195;
+   let iw=maxW,ih=iw/jpg.ratio;
+   if(ih>maxH){ih=maxH;iw=ih*jpg.ratio}
+   pdf.addImage(jpg.data,'JPEG',(w-iw)/2,imageY,iw,ih,undefined,'FAST');
+  }catch(e){fail++;pdf.setTextColor(190,64,64);pdf.text('Foto gagal dimuat dari Storage saat membuat PDF: '+String(errMessage(e)).slice(0,80),margin,90);}
+  pdf.setTextColor(123);pdf.setFontSize(8);pdf.text('Laporan internal - jangan sebarkan tanpa izin.',margin,286);
+ }
+ const filename='TaskMate_Laporan_Foto_'+state.photoReportDate+'_Shift-'+state.photoReportShift+'.pdf';
+ pdf.save(filename);notify('PDF '+photos.length+' foto dibuat'+(fail?' · '+fail+' gambar gagal dimuat':'')+'.');
+}
+
 function teamPage(){
  const code=state.workspace.invite_code,admin=isAdmin(),members=state.members.filter(m=>m.status==='approved'),pending=state.members.filter(m=>m.status==='pending'),other=state.members.filter(m=>m.status==='rejected'||m.status==='disabled');
  const adminButton=(m,action,label,cls='outline')=>`<button class="btn ${cls} sm" type="button" data-action="manage-member" data-id="${esc(m.user_id)}" data-member-action="${action}">${label}</button>`;
@@ -212,7 +419,7 @@ function teamPage(){
  <section class="panel"><h3>Kode Undangan Tim</h3><p class="small muted">Bagikan hanya ke calon karyawan. Mereka tetap perlu disetujui admin setelah memasukkan kode ini.</p><div class="codebox"><strong>${esc(code)}</strong><p>${state.mode==='demo'?'Kode contoh':'Kode tim — persetujuan tetap wajib'}</p></div><button class="btn soft block" data-action="copy-code">⧉ Salin kode tim</button><button class="btn outline block" style="margin-top:10px" data-action="sync">↻ Perbarui daftar anggota</button><p class="small muted" style="margin-top:15px">Perubahan status berlaku di server Supabase. Akun yang dinonaktifkan harus disetujui ulang bila ingin menggunakan tim ini.</p></section></div>`;
 }
 function settingsPage(){
- return `<div class="section-header" style="margin-top:0"><div><h2>Pengaturan aplikasi</h2><p>Pengingat, akun, dan koneksi cloud</p></div></div>${personalThemePicker()}<div class="panel"><div class="settings-item"><div><h4>Mode penyimpanan</h4><p>${state.mode==='cloud'?'Supabase — data tim tersimpan online dan tersinkron antar HP.':'Demo — data hanya tersimpan lokal di perangkat ini.'}</p></div><span class="chip ${state.mode==='demo'?'demo':''}"><i class="dot"></i>${state.mode==='demo'?'Lokal':'Cloud'}</span></div><div class="settings-item"><div><h4>Notifikasi deadline</h4><p>Aktifkan pengingat browser saat aplikasi sedang terbuka (30 menit sebelum deadline).</p></div><button class="btn soft sm" data-action="notifications">${typeof Notification!=='undefined'&&Notification.permission==='granted'?'Sudah aktif':'Aktifkan'}</button></div><div class="settings-item"><div><h4>Sinkronisasi data</h4><p>Terakhir diperbarui: ${state.lastSync?esc(niceTime(state.lastSync)):'Belum pernah'}.</p></div><button class="btn outline sm" data-action="sync">↻ Sinkron</button></div><div class="settings-item"><div><h4>Pengaturan server Supabase</h4><p>${state.mode==='cloud'?'Proyek cloud terhubung.':'Hubungkan proyek Supabase untuk memakai banyak HP.'}</p></div><button class="btn outline sm" data-action="open-config">${state.mode==='cloud'?'Lihat konfigurasi':'Hubungkan'}</button></div>${state.mode==='cloud'?`<div class="settings-item"><div><h4>Akun pengguna</h4><p>${esc(state.user?.email||'')} · ${esc(currentUserName())}</p></div><button class="btn danger sm" data-action="logout">Keluar</button></div>`:`<div class="settings-item"><div><h4>Reset data demo</h4><p>Hapus tugas demo pada perangkat ini dan kembalikan data contoh.</p></div><button class="btn danger sm" data-action="reset-demo">Reset</button></div>`}</div><div class="notice info" style="margin-top:18px">🔒 &nbsp; Foto bukti pada mode cloud menggunakan bucket privat. Hanya anggota tim yang memiliki akses.</div>`;
+ return `<div class="section-header" style="margin-top:0"><div><h2>Pengaturan aplikasi</h2><p>Pengingat, akun, dan koneksi cloud</p></div></div>${personalThemePicker()}<div class="panel"><div class="settings-item"><div><h4>Mode penyimpanan</h4><p>${state.mode==='cloud'?'Supabase — data tim tersimpan online dan tersinkron antar HP.':'Demo — data hanya tersimpan lokal di perangkat ini.'}</p></div><span class="chip ${state.mode==='demo'?'demo':''}"><i class="dot"></i>${state.mode==='demo'?'Lokal':'Cloud'}</span></div><div class="settings-item"><div><h4>Notifikasi deadline</h4><p>Aktifkan pengingat browser saat aplikasi sedang terbuka (30 menit sebelum deadline).</p></div><button class="btn soft sm" data-action="notifications">${typeof Notification!=='undefined'&&Notification.permission==='granted'?'Sudah aktif':'Aktifkan'}</button></div><div class="settings-item"><div><h4>Sinkronisasi HP ↔ Cloud</h4><p>Tarik data terbaru dari Supabase. Terakhir: ${state.lastSync?esc(niceTime(state.lastSync)):'Belum pernah'}.</p></div><button class="btn outline sm" data-action="sync">↻ Sinkronkan sekarang</button></div><div class="settings-item"><div><h4>Pengaturan server Supabase</h4><p>${state.mode==='cloud'?'Proyek cloud terhubung.':'Hubungkan proyek Supabase untuk memakai banyak HP.'}</p></div><button class="btn outline sm" data-action="open-config">${state.mode==='cloud'?'Lihat konfigurasi':'Hubungkan'}</button></div>${state.mode==='cloud'?`<div class="settings-item"><div><h4>Akun pengguna</h4><p>${esc(state.user?.email||'')} · ${esc(currentUserName())}</p></div><button class="btn danger sm" data-action="logout">Keluar</button></div>`:`<div class="settings-item"><div><h4>Reset data demo</h4><p>Hapus tugas demo pada perangkat ini dan kembalikan data contoh.</p></div><button class="btn danger sm" data-action="reset-demo">Reset</button></div>`}</div><div class="notice info" style="margin-top:18px">🔒 &nbsp; Foto bukti pada mode cloud menggunakan bucket privat. Hanya anggota tim yang memiliki akses.</div>`;
 }
 function authPage(){
  const signup=state.authTab==='signup';
@@ -648,7 +855,13 @@ document.addEventListener('click',async e=>{
   try{localStorage.setItem(personalThemeKey(),choice)}catch{throw new Error('Penyimpanan tema pada HP ini tidak tersedia')}
   applyPersonalTheme();render();notify('Tema '+PERSONAL_THEMES.find(t=>t.id===choice).name+' aktif di akun ini');
  }
- else if(a==='tab'){state.tab=target.dataset.tab;state.modal=null;state.search='';render();window.scrollTo(0,0)}
+ else if(a==='personal-shape'){
+  const shape=String(target.dataset.shape||'');
+  if(shape!=='neo'&&shape!=='soft')throw new Error('Bentuk kartu tidak dikenal');
+  try{localStorage.setItem(personalShapeKey(),shape)}catch{throw new Error('Tidak dapat menyimpan bentuk kartu di perangkat ini')}
+  applyPersonalTheme();render();notify(shape==='neo'?'Bentuk Folder 3D aktif':'Bentuk kartu halus aktif');
+ }
+ else if(a==='tab'){state.tab=target.dataset.tab;state.modal=null;state.search='';render();window.scrollTo(0,0);if(state.tab==='reports'&&isAdmin()&&state.mode==='cloud'&&!state.photoReportLoaded&&!state.photoReportBusy)await loadPhotoReport()}
  else if(a==='filter'){state.filter=target.dataset.filter;render()}
  else if(a==='report-range'){state.reportRange=target.dataset.value;render()}
  else if(a==='camera-open'){await openCamera(target.dataset.kind,id)}
@@ -670,14 +883,22 @@ document.addEventListener('click',async e=>{
  else if(a==='copy-code'){await copyText(state.workspace.invite_code)}
  else if(a==='copy-report'){await copyText(reportText())}
  else if(a==='export-csv'){exportCSV()}
+ else if(a==='photo-report-load'){await loadPhotoReport()}
+ else if(a==='photo-report-open'){await openPhotoReportFile(id)}
+ else if(a==='photo-report-pdf'){await exportPhotoReportPdf()}
  else if(a==='auth-tab'){state.authTab=target.dataset.tab;render()}
  else if(a==='forgot-pass'){if(state.mode!=='cloud')return;const email=prompt('Masukkan email untuk tautan reset password:');if(email){const {error}=await state.db.auth.resetPasswordForEmail(email.trim());if(error)throw error;notify('Jika email terdaftar, tautan reset akan dikirim.')}}
  else if(a==='demo-mode'){state.mode='demo';state.user={id:'demo-me'};state.notice='';setDemo();render()}
+ else if(a==='tm-schedule-delete-one'){
+  const f=document.getElementById('tm-schedule-form');if(!f)return;
+  await editImportedSchedule(f.elements.staff_key.value,f.elements.day.value,null);
+ }
  else if(a==='sync'){await syncNow()}
- else if(a==='shift-today'){state.shiftDate=localDay();await loadShiftCloud();render()}
- else if(a==='shift-select'||a==='shift-go'){state.shiftNumber=Number(target.dataset.shift);state.tab='shift';state.shiftFilter='all';
+ else if(a==='shift-today'){state.shiftDate=localDay();state.shiftView='mine';await loadShiftCloud();render()}
+ else if(a==='shift-select'||a==='shift-go'){state.shiftNumber=Number(target.dataset.shift);state.tab='shift';state.shiftFilter='all';state.shiftView='mine';
  if(state.shiftNumber===3){const t=new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Jakarta'}));if(t.getHours()<7&&state.shiftDate===localDay()){t.setDate(t.getDate()-1);state.shiftDate=localDay(t);await loadShiftCloud()}}render();window.scrollTo(0,0)}
  else if(a==='shift-filter'){state.shiftFilter=target.dataset.filter;render()}
+ else if(a==='shift-view'){const view=target.dataset.view;if(view!=='mine'&&view!=='team')throw new Error('Tampilan tidak tersedia');if(view==='team'&&!canMonitorShift())throw new Error('Hanya Admin Tim atau Admin Shift dapat memantau semua tugas');state.shiftView=view;state.shiftFilter='all';render();}
  else if(a==='shift-point-toggle'){state.showTaskManager=!state.showTaskManager;render()}
  else if(a==='shift-point-add'){modal('shift-point')}
  else if(a==='shift-point-edit'){modal('shift-point',id)}
@@ -687,7 +908,7 @@ document.addEventListener('click',async e=>{
  else if(a==='v4-sync-import'){await syncImported()}
  else if(a==='shift-rack-add-toggle'){state.showRackForm=!state.showRackForm;render()}
  else if(a==='shift-rack-deactivate'){await deactivateRack(id)}
- else if(a==='shift-prev'||a==='shift-next'){const d=new Date(state.shiftDate+'T12:00:00');d.setDate(d.getDate()+(a==='shift-next'?1:-1));state.shiftDate=localDay(d);await loadShiftCloud();render()}
+ else if(a==='shift-prev'||a==='shift-next'){const d=new Date(state.shiftDate+'T12:00:00');d.setDate(d.getDate()+(a==='shift-next'?1:-1));state.shiftDate=localDay(d);state.shiftView='mine';await loadShiftCloud();render()}
  else if(a==='shift-open-proof'){await openShiftProof(id)}
  else if(a==='extra-open'){await openExtraProof(target.dataset.kind,id)}
  else if(a==='retry-rack-ai'){await analyseRackPhoto(id)}
@@ -709,17 +930,23 @@ document.addEventListener('change',async e=>{
  try{
  if(e.target.id==='private-roster-import'){await importPrivateRoster(e.target.files?.[0]);e.target.value='';}
  else if(e.target.id==='shift-excel-import'||e.target.id==='rack-excel-import'){const file=e.target.files?.[0];e.target.value='';await importExcelStaff(file);}
+ else if(e.target.dataset.action==='shift-admin-select'){const id=e.target.value;if(id)await setShiftAdmin(id,Number(e.target.dataset.shift));else{notify('Pilih satu Admin Shift terjadwal',true);render()}}
+ else if(e.target.dataset.action==='shift-pic-select'){await setShiftPic(e.target.dataset.item,e.target.value,Number(e.target.dataset.shift))}
+ else if(e.target.id==='tm-schedule-staff'||e.target.id==='tm-schedule-date'){refreshScheduleEditorHint()}
  else if(e.target.id==='priority-filter'){state.priority=e.target.value;render()}
  else if(e.target.dataset.action==='toggle-check'){await toggleCheck(e.target.dataset.id,e.target.checked)}
  else if(e.target.dataset.action==='shift-check'){await toggleShiftCheck(e.target.dataset.id,e.target.checked)}
  else if(e.target.dataset.action==='shift-rack-check'){await toggleRackCheck(e.target.dataset.id,e.target.checked)}
  else if(e.target.dataset.action==='demo-ai-status'){await simulateAiStatus(e.target.dataset.id,e.target.value)}
- else if(e.target.id==='shift-date'){state.shiftDate=e.target.value||localDay();await loadShiftCloud();render()}
+ else if(e.target.id==='shift-date'){state.shiftDate=e.target.value||localDay();state.shiftView='mine';await loadShiftCloud();render()}
+ else if(e.target.id==='photo-report-date'){state.photoReportDate=e.target.value||localDay();state.photoReportItems=[];state.photoReportLoaded=false;await loadPhotoReport()}
+ else if(e.target.id==='photo-report-shift'){const y=window.scrollY;state.photoReportShift=e.target.value;render();window.scrollTo(0,y)}
+ else if(e.target.id==='photo-report-pic'){const y=window.scrollY;state.photoReportPic=e.target.value;render();window.scrollTo(0,y)}
  else if(e.target.dataset.action==='upload-proof'){const files=e.target.files,tid=e.target.dataset.task;if(files?.length){notify('Mengunggah bukti pekerjaan…');await uploadProof(files,tid)}}
  }catch(err){showError(err);render()}
 });
 document.addEventListener('submit',async e=>{
- const form=e.target;if(!['auth-form','create-workspace','join-workspace','task-form','add-check','config-form','shift-roster-form','rack-assign-form','staff-link-form','approve-link-form','shift-point-form'].includes(form.id))return;
+ const form=e.target;if(!['auth-form','create-workspace','join-workspace','task-form','add-check','config-form','shift-roster-form','rack-assign-form','staff-link-form','approve-link-form','shift-point-form','tm-schedule-form','tm-schedule-bulk-form'].includes(form.id))return;
  e.preventDefault();if(state.busy)return;state.busy=true;const button=form.querySelector('button[type=submit]'),orig=button?.textContent;if(button){button.disabled=true;button.textContent='Memproses…'}
  try{
  if(form.id==='auth-form'){
@@ -738,6 +965,10 @@ document.addEventListener('submit',async e=>{
   const code=String(new FormData(form).get('code')).trim();const {data,error}=await state.db.rpc('join_workspace',{p_code:code});if(error)throw error;
   state.modal=null;await loadAll();notify('Permintaan terkirim. Tunggu persetujuan admin tim.')
  }
+ else if(form.id==='tm-schedule-form'){
+  const d=new FormData(form);await editImportedSchedule(String(d.get('staff_key')||''),String(d.get('day')||''),String(d.get('code')||''));
+ }
+ else if(form.id==='tm-schedule-bulk-form'){await deleteImportedRange(form)}
  else if(form.id==='shift-roster-form')await saveShiftRoster(form);
  else if(form.id==='rack-assign-form')await saveRackAssignment(form);
  else if(form.id==='staff-link-form')await saveStaffLink(form);
@@ -878,12 +1109,66 @@ function seedDemoNovember(){
  }
  if(changed)persistShiftDemo();
 }
+function scheduleManagerPanel(){
+ if(!isAdmin()||state.mode!=='cloud'||!IMPORTED.staff.length)return '';
+ const day=cleanShiftDate(),today=localDay(),canEdit=day>=today;
+ const first=IMPORTED.staff[0];
+ const options=IMPORTED.staff.map(p=>`<option value="${esc(p.key)}">${esc(p.name)}</option>`).join('');
+ const codeOpts=[['P7','Shift 1 · 07.00–17.00'],['S14','Shift 2 · 14.00–23.00'],['M22','Shift 3 · 21.30–07.00'],['O','Libur'],['AO','Libur AO'],['MT','MT'],['C','Cuti']];
+ return `<details class="tm-schedule-admin" id="tm-schedule-admin">
+ <summary>🗓️ Kelola jadwal impor <span>Admin · edit / hapus</span></summary>
+ <div class="tm-schedule-content">
+  <p class="small muted">Ubah jadwal resmi Excel dan roster cloud sekaligus. Data historis terkunci dan jadwal dengan bukti foto tidak bisa dihapus.</p>
+  <form id="tm-schedule-form" class="tm-schedule-form">
+   <label>Nama karyawan dari Excel<select class="field" name="staff_key" id="tm-schedule-staff" required>${options}</select></label>
+   <label>Tanggal kerja<input class="field" type="date" name="day" id="tm-schedule-date" min="${today}" value="${day>=today?day:today}" required></label>
+   <label>Kode / shift baru<select class="field" name="code" id="tm-schedule-code">${codeOpts.map(([code,label])=>`<option value="${code}" ${first.schedule?.[day>=today?day:today]===code?'selected':''}>${esc(label)}</option>`).join('')}</select></label>
+   <div class="tm-schedule-current" id="tm-schedule-current">Jadwal saat ini: ${esc(first.schedule?.[day>=today?day:today]||'Belum ada')}</div>
+   <div class="tm-schedule-actions"><button class="btn primary sm" type="submit">✓ Simpan perubahan</button><button class="btn danger sm" data-action="tm-schedule-delete-one" type="button">Hapus tanggal ini</button></div>
+  </form>
+  <details class="tm-schedule-range"><summary>Hapus beberapa tanggal sekaligus</summary>
+   <form id="tm-schedule-bulk-form" class="tm-schedule-form">
+    <label>Nama<select class="field" name="staff_key" required>${options}</select></label>
+    <label>Dari<input class="field" name="from" type="date" min="${today}" value="${day>=today?day:today}" required></label>
+    <label>Sampai<input class="field" name="to" type="date" min="${today}" value="${day>=today?day:today}" required></label>
+    <button class="btn danger sm" type="submit">Hapus jadwal pada rentang ini</button>
+   </form><p class="small muted">Maksimum 62 hari. Jika satu tanggal memiliki bukti/penugasan, seluruh penghapusan dibatalkan.</p>
+  </details>
+ </div></details>`;
+}
+function refreshScheduleEditorHint(){
+ const form=document.getElementById('tm-schedule-form');if(!form)return;
+ const p=IMPORTED.staff.find(x=>x.key===form.elements.staff_key.value),day=form.elements.day.value;
+ const code=p?.schedule?.[day]||'';
+ const hint=document.getElementById('tm-schedule-current');if(hint)hint.textContent='Jadwal di Cloud: '+(code||'Belum ada / dihapus');
+ const select=form.elements.code;if(select&&code&&[...select.options].some(x=>x.value===code))select.value=code;
+}
+async function editImportedSchedule(staffKey,day,code){
+ if(state.mode!=='cloud'||!isAdmin())throw Error('Hanya Admin Tim yang bisa mengubah jadwal.');
+ const person=IMPORTED.staff.find(p=>p.key===staffKey);if(!person)throw Error('Nama karyawan tidak ditemukan.');
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(day))throw Error('Tanggal tidak valid.');
+ const initial=person.schedule?.[day]||'Tidak ada';
+ if(!confirm(`${person.name} • ${day}\nJadwal sebelumnya: ${initial}\nJadwal baru: ${code||'HAPUS'}\n\nPerbarui data impor dan roster cloud sekaligus?`))return;
+ const {data,error}=await state.db.rpc('update_imported_staff_schedule',{p_workspace:state.workspace.id,p_staff_key:staffKey,p_day:day,p_code:code||null});
+ if(error)throw error;
+ await refreshCloud();notify(data?.changed===false?'Jadwal sudah sesuai Cloud':'Jadwal berhasil diperbarui di Cloud dan HP');
+}
+async function deleteImportedRange(form){
+ if(state.mode!=='cloud'||!isAdmin())throw Error('Hanya admin yang bisa menghapus jadwal.');
+ const d=new FormData(form),staffKey=String(d.get('staff_key')||''),from=String(d.get('from')||''),to=String(d.get('to')||'');
+ const person=IMPORTED.staff.find(p=>p.key===staffKey);if(!person)throw Error('Nama karyawan tidak valid.');
+ if(!confirm(`HAPUS jadwal ${person.name} dari ${from} sampai ${to}?\nRiwayat foto/checklist terlindungi. Tindakan ini tidak dapat dibatalkan.`))return;
+ const {data,error}=await state.db.rpc('delete_imported_schedule_range',{p_workspace:state.workspace.id,p_staff_key:staffKey,p_from:from,p_to:to});
+ if(error)throw error;
+ await refreshCloud();notify(`${data??0} tanggal jadwal dihapus dari Cloud`);
+}
 function rosterSourcePanel(s=state.shiftNumber){
  const day=cleanShiftDate(),fileDay=IMPORTED.staff.some(p=>Object.hasOwn(p.schedule||{},day)),planned=staffForDay(s,day),linked=planned.filter(p=>linkedUid(p));
  return `<section class="panel source-roster-panel"><div class="shift-summary-head"><h3>📅 Jadwal dari Excel · Shift ${s}</h3><span>${esc(SHIFT_HOURS[s])}</span></div>
  <p class="small muted" style="margin-bottom:10px">Sumber: Excel yang diimpor oleh admin. Kode ${CODE_FOR_SHIFT[s]}; Shift 3 dicatat sesuai tanggal mulai 21.30.</p>
  ${fileDay?(planned.length?`<div class="staff-chip-grid">${planned.map(p=>`<div class="staff-source-chip"><strong>${esc(p.name)}</strong><small>${p.racks.length} rak · ${esc(p.schedule[day])}</small><span class="${linkedUid(p)?'linked':'pending'}">${linkedUid(p)?'✓ '+(state.mode==='demo'?'Data demo': 'Akun ditautkan'):'Akun belum ditautkan'}</span></div>`).join('')}</div>`:'<div class="notice info">Tidak ada karyawan dengan kode shift ini pada tanggal terpilih.</div>'):'<div class="notice info">Tidak ada jadwal terimpor untuk tanggal ini. Admin dapat mengimpor Excel bulan baru.</div>'}
  ${state.mode==='cloud'&&planned.length?`<p class="small muted" style="margin-top:10px">${linked.length}/${planned.length} akun ditautkan. Hanya akun yang ditautkan dan sudah diimpor ke roster online yang dapat menerima push.</p>`:''}
+ ${scheduleManagerPanel()}
  </section>`;
 }
 function staffLinkPanel(){
@@ -896,7 +1181,7 @@ function staffLinkPanel(){
  ${state.staffLinkError?`<div class="notice" style="margin-bottom:10px">⚠ ${esc(state.staffLinkError)} · Jalankan schema-shift-v4.sql di Supabase.</div>`:''}
  ${state.mode==='demo'?'<div class="notice info">Mode demo memakai 12 karyawan contoh dari jadwal. Untuk multi-HP, aktifkan Supabase dan hubungkan akun anggota tim.</div>':''}
  ${state.mode==='cloud'&&isAdmin()&&!state.staffLinkError?`${pending.length&&available.length?`<form id="staff-link-form" class="shift-roster-form"><label>Nama dalam file Excel</label><select class="field" name="staff_key" required>${pending.map(p=>`<option value="${esc(p.key)}">${esc(p.name)}</option>`).join('')}</select><label>Akun yang sudah bergabung ke tim</label><select class="field" name="user_id" required>${available.map(m=>`<option value="${esc(m.user_id)}">${esc(memberName(m.user_id))}</option>`).join('')}</select><button class="btn primary block" type="submit">🔗 Hubungkan & impor jadwal/rak</button></form>`:'<p class="small muted">Tidak ada kombinasi nama dan akun yang belum ditautkan. Pastikan karyawan sudah login dan bergabung dengan kode tim.</p>'}
- ${state.staffLinks.length?`<button class="btn outline block" data-action="v4-sync-import" style="margin-top:9px">↻ Sinkron ulang jadwal & rak untuk akun tertaut</button>`:''}`:''}
+ ${state.staffLinks.length?`<button class="btn outline block" data-action="v4-sync-import" style="margin-top:9px">↻ Cocokkan roster online dengan jadwal Cloud</button>`:''}`:''}
  ${state.staffLinks.length?`<div class="staff-link-list">${state.staffLinks.map(l=>{const p=IMPORTED.staff.find(x=>x.key===l.staff_key);return p?`<div><b>${esc(p.name)}</b><small>${esc(memberName(l.user_id))} · ${p.racks.length} rak</small></div>`:''}).join('')}</div>`:''}
  <p class="small muted" style="margin-top:10px">P7: 07.00–17.00 • S14: 14.00–23.00 • M22: 21.30–07.00. Kode O/AO/MT/C tidak dikirim pengingat shift.</p></section>`;
 }
@@ -988,10 +1273,23 @@ async function saveStaffLink(form){
  await refreshCloud();notify(`Akun ${person.name} terhubung · jadwal dan ${person.racks.length} rak diimpor`);
 }
 async function syncImported(){
- if(state.mode!=='cloud'||!isAdmin())throw new Error('Hanya admin online yang dapat sinkron.');
- if(!confirm('Sinkronkan roster online dan rak aktif untuk semua karyawan yang ditautkan? Bukti kerja yang sudah ada tidak dihapus.'))return;
- for(const l of state.staffLinks){const person=IMPORTED.staff.find(p=>p.key===l.staff_key);if(person)await importOneStaff(person,l.user_id)}
- await refreshCloud();notify('Jadwal dan daftar rak berhasil disinkron ulang');
+ if(state.mode!=='cloud'||!isAdmin())throw new Error('Hanya Admin Tim yang dapat menyinkronkan impor.');
+ if(!confirm('Ambil jadwal resmi terbaru dari Cloud dan selaraskan roster ONLINE untuk karyawan tertaut? Jadwal yang telah dihapus tidak dikembalikan.'))return;
+ // Atomic RPC is the only path to modifying the official roster; it preserves protected records.
+ let updated=0;
+ for(const link of state.staffLinks){
+  const staff=IMPORTED.staff.find(p=>p.key===link.staff_key);if(!staff)continue;
+  const days=new Set(Object.keys(staff.schedule||{}).filter(d=>d>=localDay()));
+  const r=await state.db.from('shift_roster').select('work_date').eq('workspace_id',state.workspace.id).eq('user_id',link.user_id).gte('work_date',localDay());
+  if(r.error)throw r.error;for(const x of r.data||[])days.add(x.work_date);
+  for(const day of [...days].sort()){
+   const {data,error}=await state.db.rpc('update_imported_staff_schedule',{
+    p_workspace:state.workspace.id,p_staff_key:staff.key,p_day:day,p_code:staff.schedule?.[day]||null
+   });if(error)throw new Error(`${staff.name} • ${day}: ${error.message}`);
+   if(data?.changed)updated++;
+  }
+ }
+ await refreshCloud();notify(`Cloud tersinkron · ${updated} perubahan roster diterapkan`);
 }
 
 function effectiveShiftVersion(key,s=state.shiftNumber,day=cleanShiftDate()){
@@ -1033,12 +1331,12 @@ function loadShiftDemo(){
  state.rackChecks=Array.isArray(v.rackChecks)?v.rackChecks:[];
  state.rackPhotos=Array.isArray(v.rackPhotos)?v.rackPhotos:[];
  state.mapPhotos=Array.isArray(v.mapPhotos)?v.mapPhotos:[];
- state.shiftTaskVersions=Array.isArray(v.shiftTaskVersions)?v.shiftTaskVersions:[];state.shiftTaskConfigError='';
+ state.shiftTaskVersions=Array.isArray(v.shiftTaskVersions)?v.shiftTaskVersions:[];state.shiftAdmins=Array.isArray(v.shiftAdmins)?v.shiftAdmins:[];state.shiftPics=Array.isArray(v.shiftPics)?v.shiftPics:[];state.shiftTaskConfigError='';
  state.shiftReady=true;state.shiftError='';state.rackError='';
 }
 function persistShiftDemo(){
  if(state.mode!=='demo')return;
- try{localStorage.setItem(shiftCacheKey(),JSON.stringify({logs:state.shiftLogs,roster:state.shiftRoster,proofs:state.shiftProofs,racks:state.rackAssignments,rackChecks:state.rackChecks,rackPhotos:state.rackPhotos,mapPhotos:state.mapPhotos,shiftTaskVersions:state.shiftTaskVersions}))}
+ try{localStorage.setItem(shiftCacheKey(),JSON.stringify({logs:state.shiftLogs,roster:state.shiftRoster,proofs:state.shiftProofs,racks:state.rackAssignments,rackChecks:state.rackChecks,rackPhotos:state.rackPhotos,mapPhotos:state.mapPhotos,shiftTaskVersions:state.shiftTaskVersions,shiftAdmins:state.shiftAdmins,shiftPics:state.shiftPics}))}
  catch(e){notify('Memori demo penuh. Kurangi foto atau gunakan mode cloud.',true)}
 }
 async function loadShiftCloud(){
@@ -1047,7 +1345,7 @@ async function loadShiftCloud(){
  const privateRoster=await state.db.from('shift_staff_seed').select('staff_key,full_name,short_name,month,racks,schedule').eq('workspace_id',wid);
  if(!privateRoster.error){const people=privateRoster.data||[];IMPORTED={...window.TASKMATE_IMPORTED,month:people[0]?.month||'2026-11',staff:people.map(p=>({key:p.staff_key,name:p.full_name,short:p.short_name,racks:p.racks,schedule:p.schedule}))};}
  else{state.privateRosterError=privateRoster.error.message;}
- const [roster,logs,racks,checks,staffLinks,rackPhotos,mapPhotos,pointVersions]=await Promise.all([
+ const [roster,logs,racks,checks,staffLinks,rackPhotos,mapPhotos,pointVersions,shiftAdmins,shiftPics]=await Promise.all([
   state.db.from('shift_roster').select('*').eq('workspace_id',wid).eq('work_date',day).order('start_at'),
   state.db.from('shift_logs').select('*').eq('workspace_id',wid).eq('work_date',day),
   state.db.from('shift_rack_assignments').select('*').eq('workspace_id',wid).eq('is_active',true).order('rack_name'),
@@ -1055,13 +1353,16 @@ async function loadShiftCloud(){
   state.db.from('shift_staff_links').select('staff_key,user_id').eq('workspace_id',wid),
   state.db.from('shift_rack_photos').select('*').eq('workspace_id',wid).eq('work_date',day).order('created_at',{ascending:false}),
   state.db.from('shift_map_photos').select('*').eq('workspace_id',wid).eq('work_date',day),
-  state.db.from('shift_task_versions').select('*').eq('workspace_id',wid)
+  state.db.from('shift_task_versions').select('*').eq('workspace_id',wid),
+  state.db.from('shift_shift_admins').select('*').eq('workspace_id',wid).eq('work_date',day),
+  state.db.from('shift_task_pics').select('*').eq('workspace_id',wid).eq('work_date',day)
  ]);
  if(roster.error||logs.error){state.shiftReady=false;state.shiftError='Modul Shift memerlukan schema-shift.sql. Jalankan migrasi sebelum memakai cloud.';return;}
  if(state.workspace?.id!==wid)return;
  state.shiftRoster=roster.data||[];state.shiftLogs=logs.data||[];
  state.rackAssignments=racks.data||[];state.rackChecks=checks.data||[];
  state.rackPhotos=rackPhotos.data||[];state.mapPhotos=mapPhotos.data||[];
+ state.shiftAdmins=shiftAdmins.data||[];state.shiftPics=shiftPics.data||[];state.shiftPicError=shiftAdmins.error||shiftPics.error?'Pemasangan Admin Shift/PIC belum tersedia di Supabase.':'';
  state.shiftTaskVersions=pointVersions.data||[];state.shiftTaskConfigError=pointVersions.error?'Kelola poin memerlukan schema-shift-v8.sql.':'';
  state.photoSetupError=rackPhotos.error||mapPhotos.error?'Modul foto rak / Map Do It memerlukan schema-shift-v5.sql.':'';
  state.staffLinks=staffLinks.data||[];state.staffLinkError=staffLinks.error?'Tabel pemetaan akun belum diaktifkan':'';
@@ -1074,6 +1375,78 @@ function shiftLog(item,s=state.shiftNumber){return state.shiftLogs.find(x=>x.wor
 function shiftProofList(log){return log?state.shiftProofs.filter(x=>x.log_id===log.id):[]}
 function shiftScheduled(s=state.shiftNumber){return state.shiftRoster.filter(r=>r.shift_number===s&&r.work_date===cleanShiftDate())}
 function shiftCanCheck(s=state.shiftNumber){return state.mode==='demo'||isAdmin()||shiftScheduled(s).some(r=>r.user_id===state.user?.id)}
+function shiftAdminRow(s=state.shiftNumber){return state.shiftAdmins.find(a=>a.work_date===cleanShiftDate()&&a.shift_number===s)}
+function isShiftLead(s=state.shiftNumber){return state.mode==='demo'||isAdmin()||shiftAdminRow(s)?.user_id===state.user?.id}
+function assignedPic(key,s=state.shiftNumber){return state.shiftPics.find(p=>p.work_date===cleanShiftDate()&&p.shift_number===s&&p.item_key===key)}
+// Tugas Saya adalah tampilan standar setiap akun (termasuk Admin Tim/Admin Shift).
+// Pemantauan tim harus diaktifkan secara eksplisit oleh admin dan hanya bersifat baca untuk tugas milik PIC lain.
+function canMonitorShift(s=state.shiftNumber){return state.mode==='demo'||isShiftLead(s)}
+function monitoringShift(s=state.shiftNumber){return state.shiftView==='team'&&canMonitorShift(s)}
+function assignedToCurrentUser(key,s=state.shiftNumber){
+ const p=assignedPic(key,s),linked=state.staffLinks.find(l=>l.staff_key===p?.staff_key);
+ return !!(p&&linked?.user_id===state.user?.id);
+}
+function canPerformShiftItem(key,s=state.shiftNumber){
+ if(state.mode==='demo')return true;
+ if(!shiftScheduled(s).some(r=>r.user_id===state.user?.id))return false;
+ if(key==='sisir-harga'||key==='map-do-it')return true;
+ return assignedToCurrentUser(key,s);
+}
+function visibleShiftTask(key,s=state.shiftNumber){
+ if(state.mode==='demo')return true;
+ if(monitoringShift(s))return true;
+ // Sisir Harga selalu terlihat bagi akun aktif; raknya tetap dibatasi menurut akun & roster.
+ if(key==='sisir-harga')return true;
+ if(!shiftScheduled(s).some(r=>r.user_id===state.user?.id))return false;
+ if(key==='map-do-it')return true;
+ return assignedToCurrentUser(key,s);
+}
+function picStaffForShift(s=state.shiftNumber){
+ const byKey=new Map(staffForDay(s).map(person=>[person.key,person]));
+ for(const r of shiftScheduled(s))for(const l of state.staffLinks.filter(x=>x.user_id===r.user_id)){
+  const member=IMPORTED.staff.find(x=>x.key===l.staff_key);
+  if(member)byKey.set(member.key,member);
+ }
+ return [...byKey.values()];
+}
+function shiftAssignmentPanel(s=state.shiftNumber){
+ const chosen=shiftAdminRow(s),staff=picStaffForShift(s),lead=shiftScheduled(s)
+ .filter(r=>state.members.some(m=>m.user_id===r.user_id&&m.status==='approved'));
+ if(state.shiftPicError)return `<div class="notice">⚠ ${esc(state.shiftPicError)}</div>`;
+ const isManager=isShiftLead(s),total=shiftItemsFor(s).filter(([k])=>!['sisir-harga','map-do-it'].includes(k));
+ if(!isManager&&!isAdmin())return `<section class="panel tm-shift-assignment"><h3>👤 PIC Shift ${s}</h3><p class="small muted">Admin Shift: <b>${esc(chosen?memberName(chosen.user_id):'Belum ditentukan')}</b></p><p class="small muted">Tugas yang tampil sesuai penugasan PIC Anda. Sisir Harga dan Map Do It tetap tersedia untuk setiap petugas terjadwal.</p></section>`;
+ return `<section class="panel tm-shift-assignment"><div class="shift-summary-head"><h3>👑 Admin Shift & Pembagian PIC</h3><b>${total.filter(([k])=>!!assignedPic(k,s)).length}/${total.length} dibagi</b></div>
+ <p class="small muted">${esc(cleanShiftDate())} · Shift ${s} · Penugasan berlaku khusus tanggal ini. Tugas tanpa PIC tidak tampil di akun karyawan.</p>
+ <div class="tm-shift-admin-picker"><label><b>Admin Shift</b><small>Hanya satu orang per shift</small></label>
+ <select class="field" data-action="shift-admin-select" data-shift="${s}" ${!isAdmin()?'disabled':''}><option value="">-- Belum ditentukan --</option>${lead.map(r=>`<option value="${esc(r.user_id)}" ${r.user_id===chosen?.user_id?'selected':''}>${esc(memberName(r.user_id))}</option>`).join('')}</select></div>
+ ${!lead.length?'<p class="small muted">Tautkan akun dan sinkronkan jadwal dulu agar Admin Shift bisa dipilih.</p>':''}
+ <div class="tm-pic-list">${shiftAreasFor(s).flatMap(area=>area.items.filter(([k])=>!['sisir-harga','map-do-it'].includes(k)).map(([key,title])=>{
+ const pic=assignedPic(key,s),selected=pic?.staff_key||'';
+ return `<div class="tm-pic-row"><div><strong>${esc(title)}</strong><small>${esc(area.name)}</small></div><select class="field" data-action="shift-pic-select" data-item="${esc(key)}" data-shift="${s}"><option value="">-- Belum ada PIC --</option>${staff.map(x=>`<option value="${esc(x.key)}" ${selected===x.key?'selected':''}>${esc(x.name)}${linkedUid(x)?'':' · belum login'}</option>`).join('')}</select></div>`;
+ })).join('')}</div><p class="small muted">Sisir Harga otomatis tampil di semua akun sesuai nomor rak pribadi. Map Do It tetap per petugas. Perubahan PIC setelah foto/ceklis tidak diperbolehkan agar riwayat aman.</p></section>`;
+}
+async function setShiftAdmin(userId,shift){
+ if(!isAdmin())throw new Error('Hanya Admin Tim yang dapat memilih Admin Shift');
+ if(!userId)throw new Error('Pilih satu anggota terjadwal sebagai Admin Shift.');
+ if(state.mode==='demo'){
+  state.shiftAdmins=state.shiftAdmins.filter(a=>!(a.work_date===cleanShiftDate()&&a.shift_number===shift));
+  state.shiftAdmins.push({work_date:cleanShiftDate(),shift_number:shift,user_id:userId});
+ }else{
+  const r=await state.db.rpc('set_shift_admin',{p_workspace:state.workspace.id,p_day:cleanShiftDate(),p_shift:shift,p_user:userId});if(r.error)throw r.error;
+ }
+ await afterShiftMutation();notify('Admin Shift berhasil ditentukan');
+}
+async function setShiftPic(item,staffKey,shift){
+ if(!isShiftLead(shift))throw new Error('Hanya Admin Shift atau Admin Tim yang boleh membagi PIC');
+ if(['sisir-harga','map-do-it'].includes(item))throw new Error('Tugas ini wajib tersedia untuk semua petugas');
+ if(state.mode==='demo'){
+  state.shiftPics=state.shiftPics.filter(a=>!(a.work_date===cleanShiftDate()&&a.shift_number===shift&&a.item_key===item));
+  if(staffKey)state.shiftPics.push({work_date:cleanShiftDate(),shift_number:shift,item_key:item,staff_key:staffKey});
+ }else{
+  const r=await state.db.rpc('assign_shift_task_pic',{p_workspace:state.workspace.id,p_day:cleanShiftDate(),p_shift:shift,p_item:item,p_staff:staffKey||null});if(r.error)throw r.error;
+ }
+ await afterShiftMutation();notify(staffKey?'PIC berhasil ditentukan':'PIC dikosongkan');
+}
 function onShiftNow(s=state.shiftNumber){const now=Date.now();return shiftScheduled(s).some(r=>r.user_id===state.user?.id&&new Date(r.start_at).getTime()<=now&&new Date(r.end_at).getTime()>now)}
 function todayShiftStatus(s=state.shiftNumber){if(state.mode==='demo')return 'DEMO • jadwal Excel terisi (lokal)';if(!shiftScheduled(s).length)return `Belum ada jadwal Shift ${s}`;if(onShiftNow(s))return `Sedang masuk Shift ${s}`;return shiftScheduled(s).some(x=>x.user_id===state.user?.id)?`Terjadwal Shift ${s}`:`Tidak terjadwal Shift ${s}`}
 function rackListForShift(s=state.shiftNumber){
@@ -1099,18 +1472,21 @@ function shiftItemDone(key,s=state.shiftNumber){
  return !!log?.is_checked;
 }
 function shiftDoneCount(s){return shiftItemsFor(s).filter(([key])=>shiftItemDone(key,s)).length}
-function shiftTabs(){return `<div class="shift-tabs" role="tablist" aria-label="Pilih shift">${shiftNumbers.map(s=>{const done=shiftDoneCount(s),total=shiftTotal(s);return `<button role="tab" aria-selected="${s===state.shiftNumber}" data-action="shift-select" data-shift="${s}" class="shift-tab ${s===state.shiftNumber?'active':''}"><span>Shift ${s}</span><b>${done}/${total}</b></button>`}).join('')}</div>`}
+function myShiftItems(s){return shiftItemsFor(s).filter(([key])=>visibleShiftTask(key,s))}
+function myShiftTotal(s){return myShiftItems(s).length}
+function myShiftDoneCount(s){return myShiftItems(s).filter(([key])=>shiftItemDone(key,s)).length}
+function shiftTabs(){return `<div class="shift-tabs" role="tablist" aria-label="Pilih shift">${shiftNumbers.map(s=>{const done=myShiftDoneCount(s),total=myShiftTotal(s);return `<button role="tab" aria-selected="${s===state.shiftNumber}" data-action="shift-select" data-shift="${s}" class="shift-tab ${s===state.shiftNumber?'active':''}"><span>Shift ${s}</span><b>${done}/${total}</b></button>`}).join('')}</div>`}
 function dateControls(){return `<div class="shift-datebar"><button class="btn outline sm" data-action="shift-prev" title="Tanggal sebelumnya">‹</button><input type="date" id="shift-date" value="${cleanShiftDate()}" aria-label="Tanggal kerja"><button class="btn outline sm" data-action="shift-next" title="Tanggal berikutnya">›</button><button class="btn soft sm" data-action="shift-today">Hari ini</button></div>`}
 function progressBar(done,all){return `<div class="shift-progress-track"><span style="width:${all?100*done/all:0}%"></span></div>`}
 function shiftDashboard(){
- const total=shiftNumbers.reduce((n,s)=>n+shiftTotal(s),0),done=shiftNumbers.reduce((n,s)=>n+shiftDoneCount(s),0);
- const unfinished=shiftNumbers.flatMap(s=>shiftAreasFor(s).flatMap(a=>a.items.filter(([key])=>!shiftItemDone(key,s)).map(([key,title])=>({s,key,title,area:a.name}))));
- const completed=shiftNumbers.flatMap(s=>shiftAreasFor(s).flatMap(a=>a.items.filter(([key])=>shiftItemDone(key,s)).map(([key,title])=>({s,key,title,area:a.name}))));
+ const total=shiftNumbers.reduce((n,s)=>n+myShiftTotal(s),0),done=shiftNumbers.reduce((n,s)=>n+myShiftDoneCount(s),0);
+ const unfinished=shiftNumbers.flatMap(s=>shiftAreasFor(s).flatMap(a=>a.items.filter(([key])=>visibleShiftTask(key,s)&&!shiftItemDone(key,s)).map(([key,title])=>({s,key,title,area:a.name}))));
+ const completed=shiftNumbers.flatMap(s=>shiftAreasFor(s).flatMap(a=>a.items.filter(([key])=>visibleShiftTask(key,s)&&shiftItemDone(key,s)).map(([key,title])=>({s,key,title,area:a.name}))));
  return `<div class="section-header" style="margin-top:0"><div><h2>Dashboard checklist harian</h2><p>Pencapaian Shift 1, Shift 2 dan Shift 3 · ${esc(cleanShiftDate())}</p></div><button class="btn outline sm" data-action="shift-export-all">↓ Rekap 3 Shift</button></div>
  ${dateControls()}
  <div class="source-summary">${shiftNumbers.map(s=>`<div class="source-summary-card"><strong>Shift ${s} <small>${esc(CODE_FOR_SHIFT[s])}</small></strong><span>${esc(SHIFT_HOURS[s])}</span><b>${staffForDay(s).length} petugas</b><small>${staffForDay(s).map(p=>esc(p.short)).join(' · ')||'Tidak terjadwal di file'}</small></div>`).join('')}</div>
- <section class="metrics shift-dashboard-metrics">${metric('Total checklist',total,'▤','','3 shift')}${metric('Sudah dikerjakan',done,'✓','green',`${total?Math.round(done/total*100):0}% pencapaian`)}${metric('Belum dikerjakan',total-done,'⌛','amber','Memerlukan tindakan')}${metric('Rak + foto',shiftNumbers.reduce((v,s)=>v+rackProgress(s).done,0)+'/'+shiftNumbers.reduce((v,s)=>v+rackProgress(s).total,0),'▥','','Wajib foto per rak')}${metric('Foto Map Do It',shiftNumbers.reduce((v,s)=>v+mapProgress(s).done,0)+'/'+shiftNumbers.reduce((v,s)=>v+mapProgress(s).total,0),'📷','','1 foto per petugas shift')}</section>
- <div class="shift-overview">${shiftNumbers.map(s=>{const d=shiftDoneCount(s),n=shiftTotal(s);return `<button class="shift-overview-card" data-action="shift-go" data-shift="${s}"><div class="shift-overview-title"><strong>Shift ${s}</strong><span>${d===n?'✓ Selesai':`${n-d} belum`}</span></div><div class="shift-overview-big">${n?Math.round(100*d/n):0}<small>%</small></div>${progressBar(d,n)}<p>${d} dari ${n} pekerjaan selesai</p></button>`}).join('')}</div>
+ <section class="metrics shift-dashboard-metrics">${metric('Total checklist',total,'▤','','Tugas terlihat di akun ini')}${metric('Sudah dikerjakan',done,'✓','green',`${total?Math.round(done/total*100):0}% pencapaian`)}${metric('Belum dikerjakan',total-done,'⌛','amber','Memerlukan tindakan')}${metric('Rak + foto',shiftNumbers.reduce((v,s)=>v+rackProgress(s).done,0)+'/'+shiftNumbers.reduce((v,s)=>v+rackProgress(s).total,0),'▥','','Wajib foto per rak')}${metric('Foto Map Do It',shiftNumbers.reduce((v,s)=>v+mapProgress(s).done,0)+'/'+shiftNumbers.reduce((v,s)=>v+mapProgress(s).total,0),'📷','','1 foto per petugas shift')}</section>
+ <div class="shift-overview">${shiftNumbers.map(s=>{const d=myShiftDoneCount(s),n=myShiftTotal(s);return `<button class="shift-overview-card" data-action="shift-go" data-shift="${s}"><div class="shift-overview-title"><strong>Shift ${s}</strong><span>${d===n?'✓ Selesai':`${n-d} belum`}</span></div><div class="shift-overview-big">${n?Math.round(100*d/n):0}<small>%</small></div>${progressBar(d,n)}<p>${d} dari ${n} pekerjaan selesai</p></button>`}).join('')}</div>
  <div class="shift-summary-list"><section class="panel"><div class="shift-summary-head"><h3>⌛ Belum dikerjakan</h3><span>${unfinished.length} tugas</span></div>${unfinished.length?unfinished.slice(0,15).map(x=>`<button class="shift-summary-row" data-action="shift-go" data-shift="${x.s}"><b>Shift ${x.s}</b><div><strong>${esc(x.title)}</strong><small>${esc(x.area)}</small></div><span>›</span></button>`).join(''):'<p class="small muted" style="padding:12px 0">Seluruh checklist sudah selesai.</p>'}${unfinished.length>15?`<p class="small muted" style="margin-top:12px">${unfinished.length-15} pekerjaan lainnya. Buka tab shift untuk melihat semua.</p>`:''}</section>
  <section class="panel"><div class="shift-summary-head"><h3>✓ Sudah dikerjakan</h3><span>${completed.length} tugas</span></div>${completed.length?completed.slice(0,15).map(x=>`<button class="shift-summary-row" data-action="shift-go" data-shift="${x.s}"><b class="done">Shift ${x.s}</b><div><strong>${esc(x.title)}</strong><small>${esc(x.area)}</small></div><span>✓</span></button>`).join(''):'<p class="small muted" style="padding:12px 0">Belum ada checklist yang dicentang.</p>'}${completed.length>15?`<p class="small muted" style="margin-top:12px">${completed.length-15} tugas selesai lainnya.</p>`:''}</section></div>`;
 }
@@ -1155,11 +1531,11 @@ function rackProgressDetails(s=state.shiftNumber){
  <p class="small muted" style="margin-top:12px">Setiap nomor rak wajib dipotret melalui kamera aplikasi + area rak dipilih (crop). Foto lama perlu diambil ulang. AI memberikan peringatan jika label harga tampak belum lengkap atau tidak terlihat. Petugas tetap perlu verifikasi langsung; jika AI keliru, ceklis perlu konfirmasi manual dengan alasan.</p></div>`;
 }
 function mapProgressDetails(s=state.shiftNumber){
- const crew=shiftScheduled(s),p=mapProgress(s);
+ const allCrew=shiftScheduled(s),crew=(state.mode==='demo'||monitoringShift(s))?allCrew:allCrew.filter(r=>r.user_id===state.user?.id),p=mapProgress(s);
  return `<div class="rack-panel map-panel"><div class="rack-head"><b>Map Do It per karyawan</b><span>${p.done}/${p.total} foto</span></div>
  <div class="map-progress-help">Target otomatis: <b>${p.total} foto</b> dari <b>${p.total} petugas</b> yang masuk Shift ${s}. Satu foto kamera langsung + nama rak per orang.</div>
  ${crew.length?crew.map(r=>{
-  const file=mapPhotoFor(r.user_id,s),can=shiftCanCheck(s)&&(state.mode==='demo'||isAdmin()||state.user?.id===r.user_id);
+  const file=mapPhotoFor(r.user_id,s),can=shiftCanCheck(s)&&(state.mode==='demo'||state.user?.id===r.user_id);
   return `<div class="map-crew-card" data-crew="${esc(r.user_id)}"><div class="map-crew-top"><b>${esc(memberName(r.user_id))}</b>${file?.client_captured_at?'<span class="mini-done">✓ Foto terkirim</span>':'<span class="mini-todo">Belum ada foto v7</span>'}</div>
   <div class="map-crew-content"><input class="field" data-map-note="${esc(r.user_id)}" maxlength="100" placeholder="Rak yang di-Map Do It (contoh: HA5)" value="${esc(file?.rack_note||'')}" ${!can?'disabled':''}>
   <div class="map-crew-actions"><button type="button" class="shift-upload ${!can?'disabled':''}" data-action="camera-open" data-kind="map" data-id="${esc(r.user_id)}" ${!can?'disabled':''}>📷 ${file?'Foto ulang • kamera':'Ambil foto Map Do It'}</button>
@@ -1168,32 +1544,35 @@ function mapProgressDetails(s=state.shiftNumber){
  <p class="small muted" style="margin-top:12px">Map Do It otomatis selesai setelah seluruh petugas shift mengunggah satu foto. Petugas dapat mengganti foto miliknya bila perlu.</p></div>`;
 }
 function shiftPage(){
- const s=state.shiftNumber,day=cleanShiftDate(),areas=shiftAreasFor(s),work=shiftScheduled(s),done=shiftDoneCount(s),all=shiftTotal(s),can=shiftCanCheck(s);
+ const s=state.shiftNumber,day=cleanShiftDate(),areas=shiftAreasFor(s),work=shiftScheduled(s),done=myShiftDoneCount(s),all=myShiftTotal(s),can=shiftCanCheck(s),watchAll=monitoringShift(s);
  const filter=state.shiftFilter;
  return `${shiftTabs()}<section class="shift-hero"><div><div class="tagline">DAILY SHIFT CHECKLIST</div><h2>Shift ${s} · Operasional Toko</h2><p>Checklist per area, pencapaian, PIC rak, foto tiap rak dan Map Do It per petugas.</p><span class="shift-status">${esc(todayShiftStatus(s))}</span></div><div class="shift-hero-score"><b>${done}<small> / ${all}</small></b><span>Pekerjaan selesai</span></div></section>
- <div class="shift-page-controls">${dateControls()}<button class="btn outline sm" data-action="shift-export">↓ Rekap Shift ${s}</button></div>
+ <div class="shift-page-controls">${dateControls()}<button type="button" class="btn soft sm" data-action="sync">↻ Sinkronkan Sekarang</button><button class="btn outline sm" data-action="shift-export">↓ Rekap Shift ${s}</button></div>
  ${rosterSourcePanel(s)}
+ ${shiftAssignmentPanel(s)}
+ <div class="tm-my-tasks-toolbar" aria-label="Pilihan tampilan tugas"><div><strong>${watchAll?'Pantauan Tim':'Tugas Saya'}</strong><small>${watchAll?'Seluruh tugas shift • hanya PIC yang dapat mengerjakan tugas':'Hanya tugas yang ditugaskan kepada akun Anda • Sisir Harga tetap tersedia'}</small></div>${canMonitorShift(s)?`<div class="tm-shift-view-options"><button type="button" data-action="shift-view" data-view="mine" class="${!watchAll?'active':''}" aria-pressed="${!watchAll}">👤 Tugas Saya</button><button type="button" data-action="shift-view" data-view="team" class="${watchAll?'active':''}" aria-pressed="${watchAll}">👁 Pantau Semua</button></div>`:''}</div>
  ${shiftPointManager(s)}
  ${state.shiftError?`<div class="notice" style="margin-bottom:16px">⚠ ${esc(state.shiftError)}</div>`:''}${state.rackError?`<div class="notice" style="margin-bottom:16px">⚠ ${esc(state.rackError)}</div>`:''}${state.photoSetupError?`<div class="notice" style="margin-bottom:16px">⚠ ${esc(state.photoSetupError)}</div>`:''}
- <div class="shift-progress"><div class="shift-progress-head"><b>Progress Shift ${s}</b><strong>${all?Math.round(done/all*100):0}%</strong></div>${progressBar(done,all)}<small>${done} selesai · ${all-done} belum dikerjakan · tiap tanggal tersimpan terpisah</small></div>
+ <div class="shift-progress"><div class="shift-progress-head"><b>${watchAll?'Progres Seluruh Shift':'Progres Tugas Saya'} · Shift ${s}</b><strong>${all?Math.round(done/all*100):0}%</strong></div>${progressBar(done,all)}<small>${done} selesai · ${all-done} belum dikerjakan · tiap tanggal tersimpan terpisah</small></div>
  <div class="shift-check-toolbar"><b>Status pekerjaan</b><div class="seg">${[['all','Semua'],['todo','Belum'],['done','Selesai']].map(([key,label])=>`<button data-action="shift-filter" data-filter="${key}" class="${filter===key?'active':''}">${label}</button>`).join('')}</div></div>
  ${!can&&state.mode==='cloud'?`<div class="notice info">Anda bisa memantau laporan, tetapi hanya petugas terjadwal Shift ${s} atau admin yang dapat mengisi checklist.</div>`:''}
  <div class="shift-layout"><div class="shift-area-list">${areas.map(area=>{
-  const visible=area.items.filter(([key])=>filter==='all'||(filter==='done'?shiftItemDone(key,s):!shiftItemDone(key,s)));
+  const visible=area.items.filter(([key])=>visibleShiftTask(key,s)&&(filter==='all'||(filter==='done'?shiftItemDone(key,s):!shiftItemDone(key,s))));
   if(!visible.length)return '';
-  const count=area.items.filter(([key])=>shiftItemDone(key,s)).length;
-  return `<section class="shift-area"><div class="shift-area-head"><div class="shift-area-icon">${area.icon}</div><div><h3>${esc(area.name)}</h3><span>${count} dari ${area.items.length} selesai</span></div><b>${area.items.length?Math.round(count/area.items.length*100):0}%</b></div>
+  const visibleAreaItems=area.items.filter(([key])=>visibleShiftTask(key,s));
+  const count=visibleAreaItems.filter(([key])=>shiftItemDone(key,s)).length;
+  return `<section class="shift-area"><div class="shift-area-head"><div class="shift-area-icon">${area.icon}</div><div><h3>${esc(area.name)}</h3><span>${count} dari ${visibleAreaItems.length} selesai</span></div><b>${visibleAreaItems.length?Math.round(count/visibleAreaItems.length*100):0}%</b></div>
    ${visible.map(([key,title,hint])=>{
-    const log=shiftLog(key,s),ok=shiftItemDone(key,s),proofs=shiftProofList(log),isRack=key==='sisir-harga',isMap=key==='map-do-it',photoRequired=photoRequiredFor(key,s);
-    return `<div class="shift-item ${ok?'complete':''}"><div class="shift-item-main"><input type="checkbox" data-action="shift-check" data-id="${esc(key)}" aria-label="${esc(title)}" ${ok?'checked':''} ${!can||isRack||isMap?'disabled':''}><div class="shift-item-text"><strong>${esc(title)}</strong><p>${esc(hint)}</p>${ok?`<small>✓ ${isRack?'Seluruh rak terjadwal':isMap?'Semua foto petugas sudah masuk':'Selesai oleh '+esc(memberName(log?.completed_by))+' · '+esc(niceTime(log?.completed_at))}</small>`:''}${photoRequired&&!hasValidShiftPhoto(log)?'<small style="color:#bc6b25">Wajib foto kamera + timestamp</small>':''}</div></div>
-    ${isRack?rackProgressDetails(s):isMap?mapProgressDetails(s):`<div class="shift-item-footer"><button type="button" class="shift-upload ${!can?'disabled':''}" data-action="camera-open" data-kind="shift" data-id="${esc(key)}" ${!can?'disabled':''}>📷 Ambil foto bukti + timestamp</button><span>${proofs.length} bukti</span>${proofs.map(p=>`<button class="shift-proof-btn" type="button" data-action="shift-open-proof" data-id="${esc(p.id)}">📎 ${esc(p.file_name)}</button>${p.mime_type?.startsWith('image/')?photoAuditBadge(p):''}`).join('')}</div>`}
+    const log=shiftLog(key,s),ok=shiftItemDone(key,s),proofs=shiftProofList(log),isRack=key==='sisir-harga',isMap=key==='map-do-it',photoRequired=photoRequiredFor(key,s),itemCan=canPerformShiftItem(key,s),pic=assignedPic(key,s),picName=IMPORTED.staff.find(x=>x.key===pic?.staff_key)?.name;
+    return `<div class="shift-item ${ok?'complete':''}"><div class="shift-item-main"><input type="checkbox" data-action="shift-check" data-id="${esc(key)}" aria-label="${esc(title)}" ${ok?'checked':''} ${!itemCan||isRack||isMap?'disabled':''}><div class="shift-item-text"><strong>${esc(title)}</strong><p>${esc(hint)}</p>${!isRack&&!isMap&&picName?`<small class="tm-pic-indicator">👤 PIC: ${esc(picName)}${watchAll&&!itemCan?' · hanya pantau':''}</small>`:''}${ok?`<small>✓ ${isRack?'Seluruh rak terjadwal':isMap?'Semua foto petugas sudah masuk':'Selesai oleh '+esc(memberName(log?.completed_by))+' · '+esc(niceTime(log?.completed_at))}</small>`:''}${photoRequired&&!hasValidShiftPhoto(log)?'<small style="color:#bc6b25">Wajib foto kamera + timestamp</small>':''}</div></div>
+    ${isRack?rackProgressDetails(s):isMap?mapProgressDetails(s):`<div class="shift-item-footer"><button type="button" class="shift-upload ${!itemCan?'disabled':''}" data-action="camera-open" data-kind="shift" data-id="${esc(key)}" ${!itemCan?'disabled':''}>📷 Ambil foto bukti + timestamp</button><span>${proofs.length} bukti</span>${proofs.map(p=>`<button class="shift-proof-btn" type="button" data-action="shift-open-proof" data-id="${esc(p.id)}">📎 ${esc(p.file_name)}</button>${p.mime_type?.startsWith('image/')?photoAuditBadge(p):''}`).join('')}</div>`}
     ${key==='general-cleaning'?`<div class="shift-note">${key==='map-do-it'?'Rak hari ini':'Area / jadwal GC'}: <input class="field" value="${esc(log?.note||'')}" data-shift-note="${esc(key)}" placeholder="${key==='map-do-it'?'Contoh: Rak minuman A3':'Contoh: GC gudang sesuai jadwal'}" ${!can?'disabled':''}><button class="btn soft sm" data-action="shift-save-note" data-id="${esc(key)}" ${!can?'disabled':''}>Simpan</button></div>`:''}
     </div>`}).join('')}</section>`}).join('')||'<div class="panel"><p class="small muted">Tidak ada pekerjaan pada filter ini.</p></div>'}</div>
  <aside class="shift-side"><div class="panel"><h3>👥 Jadwal Shift ${s}</h3><p class="small muted" style="margin:8px 0 13px">${esc(day)} · hanya petugas yang sedang bertugas menjadi target push.</p>
  ${work.length?work.map(r=>`<div class="shift-roster-row"><div><strong>${esc(memberName(r.user_id))}</strong><small>${esc(new Date(r.start_at).toLocaleString('id-ID',{timeZone:'Asia/Jakarta',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}))} – ${esc(new Date(r.end_at).toLocaleString('id-ID',{timeZone:'Asia/Jakarta',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}))}</small></div>${isAdmin()?`<button class="btn danger sm" data-action="shift-remove-roster" data-id="${esc(r.id)}">Hapus</button>`:''}</div>`).join(''):`<p class="small muted">Belum ada petugas terjadwal.</p>`}
  ${isAdmin()?`<form id="shift-roster-form" class="shift-roster-form"><div class="form-grp"><label>Anggota</label><select class="field" name="user_id" required>${state.members.filter(m=>m.status==='approved'||state.mode==='demo').map(m=>`<option value="${esc(m.user_id)}">${esc(memberName(m.user_id))}</option>`).join('')}</select></div><div class="form-grp"><label>Mulai (tanggal & jam)</label><input class="field" type="datetime-local" name="start_at" required></div><div class="form-grp"><label>Selesai (tanggal & jam)</label><input class="field" type="datetime-local" name="end_at" required></div><button type="submit" class="btn primary block">＋ Simpan jadwal Shift ${s}</button><p class="small muted">Tanggal kerja: <b>${esc(day)}</b>. Shift 3 dimulai pukul 21.30 tanggal ini dan selesai pukul 07.00 keesokan harinya.</p></form>`:''}</div>
  <div class="panel"><h3>▥ Tanggung jawab rak</h3><p class="small muted" style="margin:9px 0 11px">Satu rak dapat ditugaskan ke satu atau beberapa petugas. Setiap PIC ceklis raknya secara terpisah saat masuk shift.</p>
- ${state.rackAssignments.filter(r=>r.is_active!==false).length?`<div class="rack-directory">${state.rackAssignments.filter(r=>r.is_active!==false).map(r=>`<div class="rack-directory-row"><div><strong>${esc(r.rack_name)}</strong><small>${esc(memberName(r.user_id))}</small></div>${isAdmin()?`<button class="btn ghost sm" data-action="shift-rack-deactivate" data-id="${esc(r.id)}">Nonaktif</button>`:''}</div>`).join('')}</div>`:'<p class="small muted">Daftar rak belum dimasukkan.</p>'}
+ ${state.rackAssignments.filter(r=>r.is_active!==false).length?`<details class="tm-rack-directory-details"><summary><span>▤ Lihat ${state.rackAssignments.filter(r=>r.is_active!==false).length} rak aktif</span><small>Ketuk untuk tampilkan daftar</small></summary><div class="rack-directory">${state.rackAssignments.filter(r=>r.is_active!==false).map(r=>`<div class="rack-directory-row"><div><strong>${esc(r.rack_name)}</strong><small>${esc(memberName(r.user_id))}</small></div>${isAdmin()?`<button class="btn ghost sm" data-action="shift-rack-deactivate" data-id="${esc(r.id)}">Nonaktif</button>`:''}</div>`).join('')}</div></details>`:'<p class="small muted">Daftar rak belum dimasukkan.</p>'}
  ${isAdmin()?`<form id="rack-assign-form" class="shift-roster-form"><div class="form-grp"><label>PIC / karyawan</label><select class="field" name="user_id" required>${state.members.filter(m=>m.status==='approved'||state.mode==='demo').map(m=>`<option value="${esc(m.user_id)}">${esc(memberName(m.user_id))}</option>`).join('')}</select></div><div class="form-grp"><label>Nama rak / kode rak</label><input class="field" name="rack_name" maxlength="100" placeholder="Contoh: Rak A1 – snack" required></div><button class="btn primary block" type="submit">＋ Tambah tanggung jawab rak</button><p class="small muted">Daftar resmi November 2026 sudah tersedia di panel pemetaan akun.</p></form>`:''}</div>
  ${staffLinkPanel()}
  <div class="panel"><h3>🔔 Push reminder shift</h3><p class="small muted" style="margin:10px 0">Petugas aktif menerima pengingat saat shift dimulai dan tiap 2 jam selama masih ada checklist yang belum selesai.</p><button class="btn primary block" data-action="enable-push">Aktifkan push di HP ini</button><button class="btn soft block" style="margin-top:8px" data-action="shift-test-alarm">🔊 Tes suara alarm</button><p class="small muted" style="margin-top:10px">Push saat aplikasi tertutup memerlukan Supabase, HTTPS, VAPID dan server cron. Ini bukan alarm sistem yang berbunyi terus-menerus.</p></div></aside></div>`;
@@ -1212,7 +1591,7 @@ async function ensureShiftLog(key){
 async function toggleShiftCheck(key,checked){
  if(!shiftItemsFor(state.shiftNumber).some(i=>i[0]===key))throw new Error('Checklist tidak sesuai shift');
  if(['sisir-harga','map-do-it'].includes(key))throw new Error('Pekerjaan ini selesai otomatis setelah semua foto dan ceklis per petugas lengkap.');
- if(!shiftCanCheck())throw new Error(`Anda tidak dijadwalkan masuk Shift ${state.shiftNumber}.`);
+ if(!canPerformShiftItem(key))throw new Error('Tugas ini belum ditugaskan kepada akun Anda.');
  const old=await ensureShiftLog(key);
  if(photoRequiredFor(key)&&checked&&!hasValidShiftPhoto(old))throw new Error('Ambil foto dari kamera aplikasi terlebih dahulu untuk menyelesaikan pekerjaan ini.');
  const val={is_checked:checked,completed_at:checked?new Date().toISOString():null,completed_by:checked?state.user.id:null};
@@ -1222,7 +1601,7 @@ async function toggleShiftCheck(key,checked){
 }
 async function saveShiftNote(key,note){
  if(!['map-do-it','general-cleaning'].includes(key))throw new Error('Pekerjaan ini tidak memerlukan catatan');
- if(!shiftCanCheck())throw new Error(`Anda tidak dijadwalkan Shift ${state.shiftNumber}`);
+ if(!canPerformShiftItem(key))throw new Error('Tugas ini bukan tugas PIC Anda.');
  const old=await ensureShiftLog(key),val=String(note||'').trim().slice(0,300);
  if(state.mode==='demo')old.note=val;
  else{const r=await state.db.from('shift_logs').update({note:val}).eq('id',old.id);if(r.error)throw r.error}
@@ -1231,7 +1610,7 @@ async function saveShiftNote(key,note){
 async function uploadShiftProof(key,files,capturedAt=null){
  if(!(capturedAt instanceof Date)||!Number.isFinite(capturedAt.getTime()))throw new Error('Foto shift wajib diambil dari kamera aplikasi.');
  if(!files?.length)return;
- if(!shiftCanCheck())throw new Error(`Hanya petugas Shift ${state.shiftNumber} atau admin yang boleh mengunggah bukti.`);
+ if(!canPerformShiftItem(key))throw new Error('Bukti hanya boleh diunggah oleh PIC tugas ini.');
  const valid=['image/jpeg','image/png','image/webp','image/heic','application/pdf'],old=await ensureShiftLog(key);let count=0;
  const itemTitle=shiftItemTitle(key,state.shiftNumber);
  for(const file of [...files]){

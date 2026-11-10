@@ -1,8 +1,8 @@
 {
   "name": "taskmate-reminder-android",
-  "version": "13.0.0",
+  "version": "19.0.0",
   "private": true,
-  "description": "TaskMate v10: GitHub Pages + Android APK build using Capacitor",
+  "description": "TaskMate v19 • Galeri Laporan Foto Shift dan PDF, GitHub Pages + Android APK",
   "scripts": {
     "android:prepare-web": "node scripts/prepare-web.mjs",
     "android:init": "npm run android:prepare-web && npx cap add android && npx cap sync android && node scripts/patch-native.mjs",
